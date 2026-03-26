@@ -343,19 +343,42 @@ async function generateAvatar() {
     }
     stamp(hairFill);
   }
-  // Layer hair strands with zone-based recolor:
-  // Above eye line (y<22): skin pixels -> hair (full crown coverage)
-  // Below eye line (y>=22): skin pixels -> skin (no cheek tinting)
-  // Hair-colored pixels always -> target hair everywhere
+  // Smart hair recolor: skin pixels become hair-colored ONLY where
+  // surrounded by actual hair-colored pixels (scalp between strands).
+  // Isolated skin pixels (exposed face) stay as skin.
   function recolorHairZoned(imgData) {
     const d = imgData.data;
+    // First pass: find where actual hair-colored pixels are
+    const isHairPx = new Uint8Array(64 * 64);
+    for (let y = 0; y < 64; y++)
+      for (let x = 0; x < 64; x++) {
+        const i = (y * 64 + x) * 4;
+        if (d[i+3] === 0) continue;
+        const hk = colKey(d[i], d[i+1], d[i+2]);
+        if (HAIR_SET.has(hk) || (d[i]===OUTLINE[0] && d[i+1]===OUTLINE[1] && d[i+2]===OUTLINE[2])) {
+          isHairPx[y * 64 + x] = 1;
+        }
+      }
+    // Build a "hair density" map - how many hair pixels within 3px radius
+    const hairDensity = new Uint8Array(64 * 64);
+    for (let y = 0; y < 64; y++)
+      for (let x = 0; x < 64; x++) {
+        let count = 0;
+        for (let dy = -3; dy <= 3; dy++)
+          for (let dx = -3; dx <= 3; dx++) {
+            const ny = y + dy, nx = x + dx;
+            if (ny >= 0 && ny < 64 && nx >= 0 && nx < 64)
+              count += isHairPx[ny * 64 + nx];
+          }
+        hairDensity[y * 64 + x] = count;
+      }
+    // Second pass: recolor
     for (let y = 0; y < 64; y++) {
       for (let x = 0; x < 64; x++) {
         const i = (y * 64 + x) * 4;
         if (d[i+3] === 0) continue;
         const r = d[i], g = d[i+1], b = d[i+2];
         const hk = colKey(r, g, b);
-        // Hair-base colors always become target hair
         if (HAIR_SET.has(hk)) {
           const idx = HAIR_BASE.findIndex(c => c[0]===r && c[1]===g && c[2]===b);
           const nc = hair[Math.min(idx, hair.length-1)];
@@ -363,9 +386,11 @@ async function generateAvatar() {
         } else if (r===OUTLINE[0] && g===OUTLINE[1] && b===OUTLINE[2]) {
           d[i] = hair[0][0]; d[i+1] = hair[0][1]; d[i+2] = hair[0][2];
         } else {
-          // Skin pixels: above eye line -> hair, below -> skin
-          const isAboveEyes = y < 22;
-          const nc = recolorPixel(r, g, b, skin, hair, eye, lip, isAboveEyes);
+          // Skin pixel: if surrounded by lots of hair, make it hair (scalp)
+          // If sparse hair nearby, keep as skin (exposed face)
+          const density = hairDensity[y * 64 + x];
+          const makeHair = density >= 8; // need 8+ hair pixels in 7x7 area
+          const nc = recolorPixel(r, g, b, skin, hair, eye, lip, makeHair);
           d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
         }
       }
