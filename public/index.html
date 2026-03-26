@@ -339,12 +339,13 @@
   }
 
   .viewer-list li img {
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     image-rendering: pixelated;
     border: 1px solid rgba(255,215,0,0.4);
     border-radius: 3px;
     flex-shrink: 0;
+    background: rgba(26, 14, 46, 0.5);
   }
 
   @keyframes pulse {
@@ -456,16 +457,16 @@
   /* Avatar grid */
   .avatar-grid {
     display: grid;
-    grid-template-columns: repeat(5, 64px);
+    grid-template-columns: repeat(5, 80px);
     gap: 10px;
-    max-height: 320px;
+    max-height: 380px;
     overflow-y: auto;
     padding: 10px;
   }
 
   .avatar-option {
-    width: 64px;
-    height: 64px;
+    width: 80px;
+    height: 80px;
     border: 3px solid rgba(255, 215, 0, 0.3);
     border-radius: 8px;
     cursor: pointer;
@@ -473,6 +474,9 @@
     padding: 4px;
     transition: all 0.15s;
     image-rendering: pixelated;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .avatar-option:hover {
@@ -488,15 +492,15 @@
     transform: scale(1.1);
   }
 
-  .avatar-option canvas {
+  .avatar-option img {
     width: 100%;
     height: 100%;
     image-rendering: pixelated;
   }
 
   .selected-preview {
-    width: 80px;
-    height: 80px;
+    width: 96px;
+    height: 96px;
     image-rendering: pixelated;
     border: 3px solid #ffd700;
     border-radius: 10px;
@@ -521,7 +525,7 @@
 <!-- Step 2: Avatar selection -->
 <div class="modal hidden" id="avatarModal">
   <h2>Choose Your Avatar!</h2>
-  <canvas class="selected-preview" id="avatarPreview" width="32" height="32"></canvas>
+  <canvas class="selected-preview" id="avatarPreview" width="48" height="48"></canvas>
   <div class="avatar-grid" id="avatarGrid"></div>
   <button class="modal-btn" onclick="joinRoom()">JOIN</button>
 </div>
@@ -553,117 +557,444 @@
 
 <script>
 // ========================================
-// PIXEL ART AVATAR GENERATOR
+// STARDEW VALLEY STYLE AVATAR GENERATOR
 // ========================================
-const AVATAR_SIZE = 32;
+const AV = 48; // avatar canvas size
 const avatarDataUrls = [];
 
-const skinTones = ['#ffdbb4','#f5c8a0','#e8b48a','#c68c5c','#a0674b','#7a4b32'];
-const hairColors = ['#3b1f0b','#6b3a1f','#c4722a','#e8c44a','#d64040','#ff69b4','#9b59b6','#3498db','#1abc9c','#2c3e50'];
-const eyeColors = ['#2c3e50','#2980b9','#27ae60','#8e44ad','#c0392b'];
-const shirtColors = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#ff69b4','#00bcd4','#ff5252'];
+// Helpers
+function hexToRgb(h){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return[r,g,b];}
+function rgbToHex(r,g,b){return '#'+[r,g,b].map(x=>Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0')).join('');}
+function darken(hex,amt){const[r,g,b]=hexToRgb(hex);return rgbToHex(r*amt,g*amt,b*amt);}
+function lighten(hex,amt){const[r,g,b]=hexToRgb(hex);return rgbToHex(r+(255-r)*amt,g+(255-g)*amt,b+(255-b)*amt);}
 
-// Hair styles: each is an array of [x,y] pixel positions relative to the head top
-const hairStyles = [
-  // 0: long straight
-  { type: 'long', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x-1,y,16,4); c.fillRect(x-1,y+4,3,12); c.fillRect(x+12,y+4,3,12); c.fillRect(x,y,14,3); }},
-  // 1: bob
-  { type: 'bob', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x-1,y,16,4); c.fillRect(x-1,y+4,3,8); c.fillRect(x+12,y+4,3,8); c.fillRect(x,y,14,3); }},
-  // 2: ponytail
-  { type: 'pony', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x,y,14,3); c.fillRect(x-1,y,16,2); c.fillRect(x+12,y+2,4,2); c.fillRect(x+14,y+4,3,10); }},
-  // 3: pigtails
-  { type: 'pigtails', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x,y,14,3); c.fillRect(x-2,y+2,4,2); c.fillRect(x+12,y+2,4,2); c.fillRect(x-3,y+4,3,8); c.fillRect(x+14,y+4,3,8); }},
-  // 4: short
-  { type: 'short', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x,y,14,4); c.fillRect(x-1,y+1,16,2); }},
-  // 5: curly
-  { type: 'curly', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x-1,y-1,16,3); c.fillRect(x-2,y+2,3,10); c.fillRect(x+13,y+2,3,10); c.fillRect(x,y,14,3); for(let i=0;i<3;i++){c.fillRect(x-2+(i*2),y+11,2,2);c.fillRect(x+11+(i*2),y+11,2,2);} }},
-  // 6: bun
-  { type: 'bun', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x,y,14,3); c.fillRect(x+4,y-4,6,5); c.fillRect(x+3,y-3,8,4); }},
-  // 7: side swept
-  { type: 'side', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x,y,14,3); c.fillRect(x-2,y+1,6,3); c.fillRect(x-2,y+4,3,6); }},
+// Pixel drawing helper - draws a single "pixel" at grid position
+function px(ctx,x,y,color){ctx.fillStyle=color;ctx.fillRect(x,y,1,1);}
+// Draw a filled rect of pixels
+function rect(ctx,x,y,w,h,color){ctx.fillStyle=color;ctx.fillRect(x,y,w,h);}
+
+// Palette options
+const SKINS = [
+  {base:'#fce4c0',shadow:'#e8c89c',highlight:'#fff0dc',blush:'#f5a0a0'},
+  {base:'#f5d0a0',shadow:'#dbb880',highlight:'#fce0b8',blush:'#e89090'},
+  {base:'#e8b888',shadow:'#c89868',highlight:'#f0c8a0',blush:'#d88888'},
+  {base:'#c89060',shadow:'#a87040',highlight:'#d8a878',blush:'#b87878'},
+  {base:'#a07048',shadow:'#885830',highlight:'#b88860',blush:'#986868'},
+  {base:'#784830',shadow:'#603820',highlight:'#906040',blush:'#785050'},
 ];
 
-// Accessories
-const accessories = [
-  null, // none
-  { type: 'bow', draw: (c,x,y,col) => { c.fillStyle='#ff69b4'; c.fillRect(x+9,y-1,2,2); c.fillRect(x+7,y-2,2,2); c.fillRect(x+11,y-2,2,2); }},
-  { type: 'flower', draw: (c,x,y) => { c.fillStyle='#ff6b6b'; c.fillRect(x+10,y,3,3); c.fillStyle='#ffd700'; c.fillRect(x+11,y+1,1,1); }},
-  { type: 'star', draw: (c,x,y) => { c.fillStyle='#ffd700'; c.fillRect(x+10,y-1,1,3); c.fillRect(x+9,y,3,1); }},
-  { type: 'heart', draw: (c,x,y) => { c.fillStyle='#ff69b4'; c.fillRect(x-3,y+2,2,2); c.fillRect(x-1,y+3,2,2); c.fillRect(x-4,y+3,2,2); c.fillRect(x-2,y+4,2,1); }},
-  null, null, null, // more "none" to make accessories less common
+const HAIRS = [
+  {base:'#2a1506',shadow:'#1a0c02',highlight:'#4a2810'},  // dark brown
+  {base:'#6b3520',shadow:'#4a2010',highlight:'#8a4830'},  // auburn
+  {base:'#c87030',shadow:'#a85818',highlight:'#e08848'},  // ginger
+  {base:'#f0c830',shadow:'#d0a818',highlight:'#f8d858'},  // blonde
+  {base:'#e84040',shadow:'#c02828',highlight:'#f06060'},  // red
+  {base:'#ff70a8',shadow:'#d85090',highlight:'#ff90c0'},  // pink
+  {base:'#8848b0',shadow:'#683090',highlight:'#a060c8'},  // purple
+  {base:'#4080d0',shadow:'#2860a8',highlight:'#60a0e8'},  // blue
+  {base:'#30b080',shadow:'#209060',highlight:'#50d0a0'},  // teal
+  {base:'#181818',shadow:'#080808',highlight:'#383838'},  // black
 ];
+
+const EYES = ['#2858a0','#28a048','#784818','#682888','#a03030','#186878','#505050'];
+
+const SHIRTS = [
+  {base:'#d84040',shadow:'#b02828',highlight:'#f06060',detail:'#c03030'},  // red
+  {base:'#4088d0',shadow:'#2868a8',highlight:'#60a8f0',detail:'#3078c0'},  // blue
+  {base:'#40b868',shadow:'#289848',highlight:'#60d888',detail:'#30a858'},  // green
+  {base:'#d8a030',shadow:'#b88018',highlight:'#f0b848',detail:'#c89028'},  // gold
+  {base:'#9050b8',shadow:'#703898',highlight:'#a868d0',detail:'#8040a8'},  // purple
+  {base:'#e07890',shadow:'#c06078',highlight:'#f090a8',detail:'#d06880'},  // rose
+  {base:'#40b0b8',shadow:'#209098',highlight:'#60d0d8',detail:'#30a0a8'},  // teal
+  {base:'#e88040',shadow:'#c86828',highlight:'#f89858',detail:'#d87030'},  // orange
+  {base:'#f0f0f0',shadow:'#c8c8c8',highlight:'#ffffff',detail:'#d8d8d8'},  // white
+  {base:'#e0a0c0',shadow:'#c080a0',highlight:'#f0b8d0',detail:'#d090b0'},  // pastel pink
+];
+
+const OUTFITS = ['tee','blouse','overalls','dress','hoodie','vneck'];
+const ACC = ['none','bow','flower_crown','headband','earrings','necklace','glasses','hat','bandana','scarf'];
 
 function generateAvatar(seed) {
   const c = document.createElement('canvas');
-  c.width = AVATAR_SIZE;
-  c.height = AVATAR_SIZE;
+  c.width = AV; c.height = AV;
   const ctx = c.getContext('2d');
 
-  // Deterministic random from seed
-  let s = seed * 2654435761 >>> 0;
-  function r(){ s ^= s<<13; s ^= s>>17; s ^= s<<5; return (s>>>0) / 4294967296; }
+  let s = (seed * 2654435761 + 137) >>> 0;
+  function rng(){s^=s<<13;s^=s>>17;s^=s<<5;return(s>>>0)/4294967296;}
+  function pick(arr){return arr[Math.floor(rng()*arr.length)];}
 
-  const skin = skinTones[Math.floor(r() * skinTones.length)];
-  const hair = hairColors[Math.floor(r() * hairColors.length)];
-  const eyes = eyeColors[Math.floor(r() * eyeColors.length)];
-  const shirt = shirtColors[Math.floor(r() * shirtColors.length)];
-  const hairStyle = hairStyles[Math.floor(r() * hairStyles.length)];
-  const accessory = accessories[Math.floor(r() * accessories.length)];
-  const hasBlush = r() > 0.4;
+  const skin = pick(SKINS);
+  const hair = pick(HAIRS);
+  const eyeColor = pick(EYES);
+  const shirt = pick(SHIRTS);
+  const outfit = pick(OUTFITS);
+  const acc = pick(ACC);
+  const hairIdx = Math.floor(rng()*10);
+  const hasBlush = rng() > 0.3;
+  const hasFringe = rng() > 0.3;
+  const lipColor = rng() > 0.5 ? '#c85060' : '#b84848';
 
-  const ox = 9; // offset x (center the 14px wide face in 32px)
-  const oy = 6; // offset y
+  // BG - slight warm vignette like SDV portraits
+  const bg = ctx.createRadialGradient(24,20,5,24,24,30);
+  bg.addColorStop(0, 'rgba(60,40,80,0.3)');
+  bg.addColorStop(1, 'rgba(20,10,35,0.6)');
+  rect(ctx,0,0,48,48,'#1a0e2e');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,48,48);
 
-  // Neck
-  ctx.fillStyle = skin;
-  ctx.fillRect(ox+5, oy+14, 4, 3);
-
-  // Shirt / body
-  ctx.fillStyle = shirt;
-  ctx.fillRect(ox+1, oy+16, 12, 10);
-  ctx.fillRect(ox-1, oy+17, 16, 10);
-  // Collar detail
-  const darkerShirt = shirt + '99';
-  ctx.fillStyle = darkerShirt;
-  ctx.fillRect(ox+5, oy+16, 4, 1);
-
-  // Face
-  ctx.fillStyle = skin;
-  ctx.fillRect(ox+1, oy+3, 12, 11);
-  ctx.fillRect(ox, oy+4, 14, 9);
-
-  // Eyes
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(ox+3, oy+7, 3, 3);
-  ctx.fillRect(ox+8, oy+7, 3, 3);
-  ctx.fillStyle = eyes;
-  ctx.fillRect(ox+4, oy+8, 2, 2);
-  ctx.fillRect(ox+9, oy+8, 2, 2);
-  // Pupils
-  ctx.fillStyle = '#111';
-  ctx.fillRect(ox+5, oy+8, 1, 1);
-  ctx.fillRect(ox+10, oy+8, 1, 1);
-
-  // Mouth
-  ctx.fillStyle = '#c0392b';
-  ctx.fillRect(ox+5, oy+11, 4, 1);
-  // Smile curve
-  ctx.fillRect(ox+4, oy+11, 1, 1);
-  ctx.fillRect(ox+9, oy+11, 1, 1);
-
-  // Blush
-  if (hasBlush) {
-    ctx.fillStyle = 'rgba(255,150,150,0.45)';
-    ctx.fillRect(ox+1, oy+10, 3, 2);
-    ctx.fillRect(ox+10, oy+10, 3, 2);
+  // --- BODY / SHOULDERS ---
+  const bx=14, by=32; // body top-left
+  if(outfit==='dress'){
+    // Dress with puff shoulders
+    rect(ctx,bx-2,by+2,24,14,shirt.base);
+    rect(ctx,bx,by,20,14,shirt.base);
+    rect(ctx,bx+1,by+1,18,2,shirt.highlight);
+    rect(ctx,bx-2,by+2,4,5,shirt.base); // left shoulder puff
+    rect(ctx,bx+18,by+2,4,5,shirt.base);
+    rect(ctx,bx-1,by+3,3,3,shirt.highlight);
+    rect(ctx,bx+18,by+3,3,3,shirt.highlight);
+    // Neckline
+    rect(ctx,bx+7,by,6,3,skin.base);
+    rect(ctx,bx+8,by,4,2,skin.highlight);
+    // Dress detail
+    rect(ctx,bx+2,by+6,16,1,shirt.detail);
+    rect(ctx,bx+8,by+3,4,1,shirt.shadow);
+  } else if(outfit==='overalls'){
+    // Undershirt
+    rect(ctx,bx,by,20,14,shirt.base);
+    rect(ctx,bx-2,by+2,24,12,shirt.base);
+    rect(ctx,bx+1,by+1,18,2,shirt.highlight);
+    // Overalls
+    rect(ctx,bx+2,by+5,16,10,'#5878a8');
+    rect(ctx,bx+3,by+5,14,1,'#6888b8');
+    // Straps
+    rect(ctx,bx+4,by+1,3,5,'#5878a8');
+    rect(ctx,bx+13,by+1,3,5,'#5878a8');
+    rect(ctx,bx+5,by+2,1,3,'#6888b8');
+    rect(ctx,bx+14,by+2,1,3,'#6888b8');
+    // Pocket
+    rect(ctx,bx+7,by+8,6,4,'#486898');
+    rect(ctx,bx+8,by+9,4,2,'#5878a8');
+    // Neck
+    rect(ctx,bx+7,by,6,2,skin.base);
+  } else if(outfit==='hoodie'){
+    rect(ctx,bx-2,by+1,24,14,shirt.base);
+    rect(ctx,bx,by,20,14,shirt.base);
+    rect(ctx,bx+1,by+1,18,3,shirt.highlight);
+    // Hood lines
+    rect(ctx,bx+7,by,6,3,skin.base);
+    rect(ctx,bx+5,by,2,4,shirt.shadow);
+    rect(ctx,bx+13,by,2,4,shirt.shadow);
+    // Pocket
+    rect(ctx,bx+5,by+8,10,4,shirt.shadow);
+    rect(ctx,bx+6,by+9,8,2,shirt.base);
+    // Drawstring
+    px(ctx,bx+9,by+3,shirt.detail);
+    px(ctx,bx+10,by+4,shirt.detail);
+    px(ctx,bx+11,by+3,shirt.detail);
+  } else if(outfit==='blouse'){
+    rect(ctx,bx-1,by+1,22,14,shirt.base);
+    rect(ctx,bx,by,20,14,shirt.base);
+    // Rounded collar
+    rect(ctx,bx+6,by,8,3,skin.base);
+    rect(ctx,bx+5,by+1,2,2,shirt.highlight);
+    rect(ctx,bx+13,by+1,2,2,shirt.highlight);
+    // Buttons
+    for(let i=0;i<3;i++) px(ctx,bx+10,by+4+i*2,shirt.detail);
+    rect(ctx,bx+1,by+1,4,2,shirt.highlight);
+    rect(ctx,bx+15,by+1,4,2,shirt.highlight);
+    // Slight puff sleeve
+    rect(ctx,bx-2,by+2,3,4,shirt.base);
+    rect(ctx,bx+19,by+2,3,4,shirt.base);
+  } else if(outfit==='vneck'){
+    rect(ctx,bx-1,by+1,22,14,shirt.base);
+    rect(ctx,bx,by,20,14,shirt.base);
+    // V-neck
+    rect(ctx,bx+7,by,6,2,skin.base);
+    rect(ctx,bx+8,by+2,4,2,skin.base);
+    rect(ctx,bx+9,by+4,2,1,skin.base);
+    // V lines
+    px(ctx,bx+7,by+2,shirt.shadow);
+    px(ctx,bx+8,by+3,shirt.shadow);
+    px(ctx,bx+12,by+2,shirt.shadow);
+    px(ctx,bx+11,by+3,shirt.shadow);
+    rect(ctx,bx+1,by+1,5,2,shirt.highlight);
+    rect(ctx,bx+14,by+1,5,2,shirt.highlight);
+  } else { // tee
+    rect(ctx,bx-1,by+1,22,14,shirt.base);
+    rect(ctx,bx,by,20,14,shirt.base);
+    rect(ctx,bx+7,by,6,2,skin.base);
+    rect(ctx,bx+1,by+1,5,2,shirt.highlight);
+    rect(ctx,bx+14,by+1,5,2,shirt.highlight);
+    // Sleeve lines
+    rect(ctx,bx-1,by+5,2,1,shirt.shadow);
+    rect(ctx,bx+19,by+5,2,1,shirt.shadow);
   }
 
-  // Hair
-  hairStyle.draw(ctx, ox, oy, hair);
+  // --- NECK ---
+  rect(ctx,19,29,10,5,skin.base);
+  rect(ctx,20,29,8,4,skin.highlight);
+  rect(ctx,19,32,2,2,skin.shadow);
+  rect(ctx,27,32,2,2,skin.shadow);
 
-  // Accessory
-  if (accessory) {
-    accessory.draw(ctx, ox, oy, hair);
+  // --- HEAD ---
+  const hx=12,hy=6;
+  // Head shape - rounded
+  rect(ctx,hx+2,hy,20,24,skin.base);
+  rect(ctx,hx+1,hy+2,22,20,skin.base);
+  rect(ctx,hx,hy+4,24,16,skin.base);
+  // Highlights
+  rect(ctx,hx+3,hy+1,18,4,skin.highlight);
+  rect(ctx,hx+2,hy+3,6,8,skin.highlight);
+  // Jaw shadow
+  rect(ctx,hx+1,hy+20,22,2,skin.shadow);
+  rect(ctx,hx+2,hy+22,20,2,skin.shadow);
+  rect(ctx,hx+4,hy+24,16,1,skin.shadow);
+
+  // --- EARS ---
+  rect(ctx,hx-1,hy+10,2,5,skin.base);
+  rect(ctx,hx+23,hy+10,2,5,skin.base);
+  px(ctx,hx-1,hy+11,skin.shadow);
+  px(ctx,hx+24,hy+11,skin.shadow);
+
+  // --- EYES ---
+  const ey=hy+11, lex=hx+4, rex=hx+14;
+  // White
+  rect(ctx,lex,ey,5,4,'#fff');
+  rect(ctx,rex,ey,5,4,'#fff');
+  // Eye outline (top)
+  rect(ctx,lex,ey-1,5,1,'#2a1a10');
+  rect(ctx,rex,ey-1,5,1,'#2a1a10');
+  // Iris
+  rect(ctx,lex+1,ey,3,4,eyeColor);
+  rect(ctx,rex+1,ey,3,4,eyeColor);
+  // Iris highlight
+  rect(ctx,lex+1,ey,2,2,lighten(eyeColor,0.3));
+  rect(ctx,rex+1,ey,2,2,lighten(eyeColor,0.3));
+  // Pupil
+  rect(ctx,lex+2,ey+1,2,2,'#101010');
+  rect(ctx,rex+2,ey+1,2,2,'#101010');
+  // Sparkle
+  px(ctx,lex+1,ey,'#fff');
+  px(ctx,rex+1,ey,'#fff');
+  // Lower lid
+  px(ctx,lex,ey+3,skin.shadow);
+  px(ctx,lex+4,ey+3,skin.shadow);
+  px(ctx,rex,ey+3,skin.shadow);
+  px(ctx,rex+4,ey+3,skin.shadow);
+  // Lashes
+  px(ctx,lex-1,ey-1,'#2a1a10');
+  px(ctx,lex+5,ey-1,'#2a1a10');
+  px(ctx,rex-1,ey-1,'#2a1a10');
+  px(ctx,rex+5,ey-1,'#2a1a10');
+  // Eyebrows
+  rect(ctx,lex,ey-3,5,1,darken(hair.base,0.7));
+  rect(ctx,rex,ey-3,5,1,darken(hair.base,0.7));
+  px(ctx,lex-1,ey-2,darken(hair.base,0.7));
+  px(ctx,rex+5,ey-2,darken(hair.base,0.7));
+
+  // --- NOSE ---
+  px(ctx,hx+12,hy+16,skin.shadow);
+  px(ctx,hx+11,hy+17,skin.shadow);
+  px(ctx,hx+12,hy+17,darken(skin.base,0.85));
+
+  // --- MOUTH ---
+  rect(ctx,hx+8,hy+20,8,1,lipColor);
+  rect(ctx,hx+9,hy+21,6,1,lighten(lipColor,0.15));
+  px(ctx,hx+7,hy+20,darken(lipColor,0.8));
+  px(ctx,hx+16,hy+20,darken(lipColor,0.8));
+  // Smile highlight
+  px(ctx,hx+10,hy+20,lighten(lipColor,0.2));
+  px(ctx,hx+11,hy+20,lighten(lipColor,0.2));
+
+  // --- BLUSH ---
+  if(hasBlush){
+    ctx.globalAlpha=0.35;
+    rect(ctx,hx+1,hy+16,4,3,skin.blush);
+    rect(ctx,hx+19,hy+16,4,3,skin.blush);
+    ctx.globalAlpha=0.2;
+    rect(ctx,hx+2,hy+15,3,1,skin.blush);
+    rect(ctx,hx+19,hy+15,3,1,skin.blush);
+    ctx.globalAlpha=1;
+  }
+
+  // --- HAIR ---
+  const hb=hair.base, hs=hair.shadow, hh=hair.highlight;
+  // All styles start with top-of-head coverage
+  rect(ctx,hx+1,hy-2,22,6,hb);
+  rect(ctx,hx+2,hy-3,20,4,hb);
+  rect(ctx,hx+4,hy-4,16,3,hb);
+  // Top highlight
+  rect(ctx,hx+5,hy-3,10,2,hh);
+  rect(ctx,hx+4,hy-2,6,1,hh);
+
+  switch(hairIdx % 10){
+    case 0: // Long flowing
+      rect(ctx,hx-2,hy,3,26,hb);rect(ctx,hx+23,hy,3,26,hb);
+      rect(ctx,hx-1,hy-1,2,24,hh);rect(ctx,hx+24,hy-1,1,20,hh);
+      rect(ctx,hx-3,hy+10,3,18,hb);rect(ctx,hx+24,hy+10,3,18,hb);
+      rect(ctx,hx-2,hy+12,2,14,hs);rect(ctx,hx+25,hy+12,1,12,hs);
+      // Strand details
+      for(let i=0;i<4;i++){px(ctx,hx-2,hy+20+i*2,hh);px(ctx,hx+25,hy+18+i*2,hh);}
+      if(hasFringe){rect(ctx,hx+2,hy+2,8,4,hb);rect(ctx,hx+3,hy+2,4,3,hh);px(ctx,hx+5,hy+5,hb);}
+      break;
+    case 1: // Bob with bangs
+      rect(ctx,hx-1,hy,2,18,hb);rect(ctx,hx+23,hy,2,18,hb);
+      rect(ctx,hx-2,hy+4,3,12,hb);rect(ctx,hx+23,hy+4,3,12,hb);
+      rect(ctx,hx-1,hy+2,2,8,hh);
+      // Bangs
+      rect(ctx,hx+2,hy+1,20,4,hb);rect(ctx,hx+3,hy+2,8,2,hh);
+      rect(ctx,hx+2,hy+4,6,2,hb);
+      // Bob curl ends
+      rect(ctx,hx-2,hy+15,4,2,hh);rect(ctx,hx+22,hy+15,4,2,hh);
+      break;
+    case 2: // High ponytail
+      rect(ctx,hx-1,hy,2,12,hb);rect(ctx,hx+23,hy,2,12,hb);
+      // Ponytail going right
+      rect(ctx,hx+20,hy-4,6,6,hb);rect(ctx,hx+24,hy-2,4,4,hb);
+      rect(ctx,hx+26,hy,3,12,hb);rect(ctx,hx+27,hy+2,2,14,hb);
+      rect(ctx,hx+21,hy-3,4,3,hh);rect(ctx,hx+27,hy+4,1,8,hh);
+      // Hair tie
+      rect(ctx,hx+24,hy-1,2,3,'#d84040');
+      if(hasFringe){rect(ctx,hx+2,hy+2,7,3,hb);rect(ctx,hx+3,hy+2,3,2,hh);}
+      break;
+    case 3: // Pigtails
+      rect(ctx,hx-1,hy,2,10,hb);rect(ctx,hx+23,hy,2,10,hb);
+      // Left pigtail
+      rect(ctx,hx-4,hy+4,4,4,hb);rect(ctx,hx-5,hy+6,4,16,hb);rect(ctx,hx-4,hy+8,3,12,hh);
+      // Right pigtail
+      rect(ctx,hx+24,hy+4,4,4,hb);rect(ctx,hx+25,hy+6,4,16,hb);rect(ctx,hx+25,hy+8,3,12,hh);
+      // Hair ties
+      rect(ctx,hx-3,hy+5,3,2,'#ff70a8');rect(ctx,hx+24,hy+5,3,2,'#ff70a8');
+      // Bangs
+      rect(ctx,hx+2,hy+1,20,4,hb);rect(ctx,hx+4,hy+2,6,2,hh);
+      rect(ctx,hx+8,hy+4,8,2,hb);
+      break;
+    case 4: // Short pixie
+      rect(ctx,hx-1,hy-1,2,10,hb);rect(ctx,hx+23,hy-1,2,8,hb);
+      rect(ctx,hx,hy,24,5,hb);rect(ctx,hx+2,hy+1,10,3,hh);
+      // Textured top
+      for(let i=0;i<5;i++){px(ctx,hx+4+i*3,hy-4+Math.floor(rng()*2),hb);px(ctx,hx+3+i*3,hy-3,hh);}
+      rect(ctx,hx+6,hy-5,12,3,hb);rect(ctx,hx+8,hy-4,6,2,hh);
+      break;
+    case 5: // Curly/wavy
+      rect(ctx,hx-2,hy-1,3,22,hb);rect(ctx,hx+23,hy-1,3,22,hb);
+      rect(ctx,hx-3,hy+6,3,16,hb);rect(ctx,hx+24,hy+6,3,16,hb);
+      // Curly texture
+      for(let i=0;i<6;i++){
+        const cy=hy+4+i*3;
+        px(ctx,hx-3,cy,hh);px(ctx,hx-2,cy+1,hs);
+        px(ctx,hx+25,cy,hh);px(ctx,hx+24,cy+1,hs);
+      }
+      // Volume on top
+      rect(ctx,hx+3,hy-5,18,4,hb);rect(ctx,hx+6,hy-4,10,2,hh);
+      // Curly bangs
+      rect(ctx,hx+2,hy+1,8,5,hb);rect(ctx,hx+3,hy+2,3,2,hh);
+      px(ctx,hx+6,hy+4,hh);px(ctx,hx+4,hy+5,hb);
+      break;
+    case 6: // Elegant bun
+      rect(ctx,hx-1,hy,2,12,hb);rect(ctx,hx+23,hy,2,12,hb);
+      // Bun on top
+      rect(ctx,hx+8,hy-8,8,6,hb);rect(ctx,hx+7,hy-7,10,5,hb);
+      rect(ctx,hx+9,hy-7,6,3,hh);rect(ctx,hx+10,hy-6,4,1,lighten(hh,0.2));
+      // Pin/ornament
+      rect(ctx,hx+14,hy-6,2,2,'#ffd700');px(ctx,hx+15,hy-7,'#ffd700');
+      // Side strands
+      rect(ctx,hx,hy+4,2,8,hb);rect(ctx,hx+22,hy+4,2,8,hb);
+      if(hasFringe){rect(ctx,hx+2,hy+2,7,3,hb);rect(ctx,hx+3,hy+2,3,2,hh);}
+      break;
+    case 7: // Side-swept
+      rect(ctx,hx-1,hy,2,14,hb);rect(ctx,hx+23,hy,2,10,hb);
+      // Big side sweep
+      rect(ctx,hx+1,hy+1,14,5,hb);rect(ctx,hx+2,hy+2,6,3,hh);
+      rect(ctx,hx-2,hy+4,4,6,hb);rect(ctx,hx-3,hy+6,3,10,hb);
+      rect(ctx,hx-2,hy+8,2,6,hh);
+      // Sweep across forehead
+      rect(ctx,hx+2,hy+4,12,2,hb);rect(ctx,hx+3,hy+4,4,1,hh);
+      break;
+    case 8: // Braids
+      rect(ctx,hx-1,hy,2,10,hb);rect(ctx,hx+23,hy,2,10,hb);
+      // Left braid
+      for(let i=0;i<7;i++){
+        const by2=hy+8+i*3;
+        rect(ctx,hx-3,by2,3,2,(i%2)?hb:hh);
+        rect(ctx,hx-4,by2+1,2,2,(i%2)?hh:hb);
+      }
+      // Right braid
+      for(let i=0;i<7;i++){
+        const by2=hy+8+i*3;
+        rect(ctx,hx+24,by2,3,2,(i%2)?hb:hh);
+        rect(ctx,hx+25,by2+1,2,2,(i%2)?hh:hb);
+      }
+      // Braid ties
+      rect(ctx,hx-3,hy+28,3,2,'#ffd700');rect(ctx,hx+24,hy+28,3,2,'#ffd700');
+      // Bangs
+      rect(ctx,hx+2,hy+1,20,4,hb);rect(ctx,hx+8,hy+2,8,2,hh);
+      rect(ctx,hx+3,hy+4,6,2,hb);rect(ctx,hx+15,hy+4,5,2,hb);
+      break;
+    case 9: // Messy/spiky
+      rect(ctx,hx-1,hy-1,2,10,hb);rect(ctx,hx+23,hy-1,2,10,hb);
+      // Spiky top
+      rect(ctx,hx+2,hy-3,20,6,hb);
+      for(let i=0;i<6;i++){
+        const sx=hx+2+i*3+Math.floor(rng()*2);
+        const sh=3+Math.floor(rng()*4);
+        rect(ctx,sx,hy-3-sh,3,sh,hb);rect(ctx,sx+1,hy-2-sh,1,sh-1,hh);
+      }
+      // Messy bangs
+      rect(ctx,hx+2,hy+2,8,4,hb);rect(ctx,hx+14,hy+3,6,3,hb);
+      rect(ctx,hx+3,hy+3,3,2,hh);
+      break;
+  }
+
+  // --- ACCESSORIES ---
+  switch(acc){
+    case 'bow':
+      rect(ctx,hx+15,hy-2,4,3,'#ff4080');rect(ctx,hx+13,hy-1,2,2,'#ff4080');
+      rect(ctx,hx+19,hy-1,2,2,'#ff4080');rect(ctx,hx+16,hy-1,2,1,'#ff60a0');
+      px(ctx,hx+17,hy-1,'#d03060');
+      break;
+    case 'flower_crown':
+      for(let i=0;i<4;i++){
+        const fx=hx+3+i*5,fy=hy-3;
+        rect(ctx,fx,fy,3,3,['#ff6080','#ffb040','#80d0ff','#ff80c0'][i]);
+        px(ctx,fx+1,fy+1,'#ffd700');
+      }
+      rect(ctx,hx+2,hy-1,20,1,'#40a040');
+      break;
+    case 'headband':
+      rect(ctx,hx,hy+1,24,2,'#d84040');rect(ctx,hx+2,hy+1,20,1,'#f06060');
+      break;
+    case 'earrings':
+      rect(ctx,hx-2,hy+14,2,3,'#ffd700');rect(ctx,hx+24,hy+14,2,3,'#ffd700');
+      px(ctx,hx-2,hy+16,'#ff6060');px(ctx,hx+25,hy+16,'#ff6060');
+      break;
+    case 'necklace':
+      rect(ctx,20,33,8,1,'#ffd700');rect(ctx,22,34,4,1,'#ffd700');
+      px(ctx,23,35,'#60d0ff');px(ctx,24,35,'#60d0ff');
+      break;
+    case 'glasses':
+      rect(ctx,hx+3,hy+10,6,4,'#404040');rect(ctx,hx+15,hy+10,6,4,'#404040');
+      rect(ctx,hx+4,hy+11,4,2,'#a0d8ff');rect(ctx,hx+16,hy+11,4,2,'#a0d8ff');
+      rect(ctx,hx+9,hy+11,6,1,'#404040');
+      px(ctx,hx+2,hy+11,'#404040');px(ctx,hx+21,hy+11,'#404040');
+      break;
+    case 'hat':
+      rect(ctx,hx-2,hy-2,28,3,shirt.base);rect(ctx,hx+2,hy-8,20,7,shirt.base);
+      rect(ctx,hx+3,hy-7,18,2,shirt.highlight);
+      rect(ctx,hx+2,hy-2,20,1,shirt.shadow);
+      rect(ctx,hx+4,hy-4,14,1,darken(shirt.base,0.7));
+      break;
+    case 'bandana':
+      rect(ctx,hx,hy+1,24,3,shirt.base);rect(ctx,hx+2,hy+1,20,1,shirt.highlight);
+      // Knot on side
+      rect(ctx,hx+22,hy+2,4,2,shirt.base);rect(ctx,hx+24,hy+4,3,3,shirt.base);
+      rect(ctx,hx+25,hy+6,2,2,shirt.shadow);
+      break;
+    case 'scarf':
+      rect(ctx,17,31,14,4,shirt.base);rect(ctx,18,32,12,2,shirt.highlight);
+      rect(ctx,28,33,4,6,shirt.base);rect(ctx,29,35,3,4,shirt.shadow);
+      break;
   }
 
   return c.toDataURL();
@@ -707,7 +1038,7 @@ function updatePreview(id) {
   const pctx = preview.getContext('2d');
   const img = new Image();
   img.onload = () => {
-    pctx.clearRect(0, 0, 32, 32);
+    pctx.clearRect(0, 0, 48, 48);
     pctx.drawImage(img, 0, 0);
   };
   img.src = avatarDataUrls[id];
