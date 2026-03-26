@@ -208,6 +208,24 @@ async function generateAvatar() {
     ctx.drawImage(tmp, 0, 0);
   }
 
+  // Helper: stamp only NON-SKIN pixels (anything not in BASE_SKIN palette)
+  function stampNonSkin(imgData) {
+    const nonSkin = new ImageData(64, 64);
+    const d = imgData.data;
+    const skinSet = new Set(BASE_SKIN.map(c => c.join(',')));
+    for (let y = 0; y < 64; y++)
+      for (let x = 0; x < 64; x++) {
+        const i = (y * 64 + x) * 4;
+        if (d[i+3] === 0) continue;
+        const key = d[i] + ',' + d[i+1] + ',' + d[i+2];
+        if (!skinSet.has(key)) {
+          nonSkin.data[i] = d[i]; nonSkin.data[i+1] = d[i+1];
+          nonSkin.data[i+2] = d[i+2]; nonSkin.data[i+3] = 255;
+        }
+      }
+    stamp(nonSkin);
+  }
+
   // Helper: stamp ONLY detail pixels from imgData
   function stampDetails(imgData, isHair) {
     const detail = new ImageData(64, 64);
@@ -307,21 +325,18 @@ async function generateAvatar() {
     if (img) { stamp(recolorData(getPixels(img), true)); }
   }
 
-  // 7. Glasses
+  // 7. Glasses - stamp only non-skin pixels (frames, lenses) to avoid wiping hair
   const gl = pick(GLASSES);
   if (gl) {
     const img = await loadImage(gl);
-    if (img) {
-      const gd = recolorData(getPixels(img), false);
-      stamp(gd);
-    }
+    if (img) stampNonSkin(getPixels(img));
   }
 
-  // 8. Ear/neck accessories
+  // 8. Ear/neck accessories - stamp only non-skin pixels
   const ea = pick(EAR_ACC);
-  if (ea) { const img = await loadImage(ea); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
+  if (ea) { const img = await loadImage(ea); if (img) stampNonSkin(getPixels(img)); }
   const na = pick(NECK_ACC);
-  if (na) { const img = await loadImage(na); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
+  if (na) { const img = await loadImage(na); if (img) stampNonSkin(getPixels(img)); }
 
   // 9. RE-STAMP all facial details on top (so they show through hair/clothes)
   for (const [name, isH] of features) {
