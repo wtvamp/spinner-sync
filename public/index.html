@@ -505,6 +505,30 @@
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.05);
   }
+
+  .random-btn {
+    padding: 8px 24px;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 11px;
+    background: linear-gradient(180deg, #a18cd1, #7b5ea7);
+    color: #fff;
+    border: 2px solid #ffd700;
+    border-radius: 8px;
+    cursor: pointer;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+    box-shadow: 0 3px 0 #5b3d7a;
+    transition: all 0.1s;
+  }
+
+  .random-btn:hover {
+    background: linear-gradient(180deg, #b8a0e0, #a18cd1);
+    transform: translateY(-2px);
+  }
+
+  .random-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #5b3d7a;
+  }
 </style>
 </head>
 <body>
@@ -525,6 +549,7 @@
 <div class="modal hidden" id="avatarModal">
   <h2>Choose Your Avatar!</h2>
   <img class="selected-preview" id="avatarPreview" width="128" height="128">
+  <button class="random-btn" onclick="pickRandom()">Random!</button>
   <div class="avatar-grid" id="avatarGrid"></div>
   <button class="modal-btn" onclick="joinRoom()">JOIN</button>
 </div>
@@ -564,14 +589,20 @@ for (let i = 0; i < 20; i++) {
   avatarDataUrls.push(`/portraits/avatar_${i}.png`);
 }
 
+// Shuffle order so it feels different each time
+for (let i = avatarDataUrls.length - 1; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
+  [avatarDataUrls[i], avatarDataUrls[j]] = [avatarDataUrls[j], avatarDataUrls[i]];
+}
 
-let selectedAvatarId = 0;
+// Start with a random selection
+let selectedAvatarId = Math.floor(Math.random() * avatarDataUrls.length);
 
 // Build avatar grid
 const grid = document.getElementById('avatarGrid');
 avatarDataUrls.forEach((url, i) => {
   const div = document.createElement('div');
-  div.className = 'avatar-option' + (i === 0 ? ' selected' : '');
+  div.className = 'avatar-option' + (i === selectedAvatarId ? ' selected' : '');
   const img = document.createElement('img');
   img.src = url;
   img.width = 70;
@@ -581,8 +612,7 @@ avatarDataUrls.forEach((url, i) => {
   grid.appendChild(div);
 });
 
-// Show preview of first avatar
-updatePreview(0);
+updatePreview(selectedAvatarId);
 
 function selectAvatar(id) {
   selectedAvatarId = id;
@@ -594,6 +624,13 @@ function selectAvatar(id) {
 
 function updatePreview(id) {
   document.getElementById('avatarPreview').src = avatarDataUrls[id];
+}
+
+function pickRandom() {
+  const id = Math.floor(Math.random() * avatarDataUrls.length);
+  selectAvatar(id);
+  // Scroll the selected one into view
+  document.querySelectorAll('.avatar-option')[id].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ========================================
