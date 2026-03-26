@@ -323,13 +323,15 @@ async function generateAvatar() {
     }
   }
 
-  // 4. Clothing
-  const topImg = await loadImage(pick(TOPS));
+  // 4. Clothing (drawn before hair, will re-stamp after)
+  const topName = pick(TOPS);
+  const slName = pick(SLEEVES);
+  const ovName = pick(OVERS);
+  const topImg = await loadImage(topName);
   if (topImg) { ctx.drawImage(topImg, 0, 0, 64, 64); }
-  const slImg = await loadImage(pick(SLEEVES));
+  const slImg = await loadImage(slName);
   if (slImg) { ctx.drawImage(slImg, 0, 0, 64, 64); }
-  const ov = pick(OVERS);
-  if (ov) { const img = await loadImage(ov); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
+  if (ovName) { const img = await loadImage(ovName); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
 
   // 5. Hair - paint a hair-color fill ONLY where hair/bang layers have pixels
   // This follows the natural hair shape instead of a hard rectangle
@@ -444,7 +446,10 @@ async function generateAvatar() {
   const na = pick(NECK_ACC);
   if (na) { const img = await loadImage(na); if (img) stampNonSkin(getPixels(img)); }
 
-  // 9. No hard skin-fix needed - handled by smart hair recolor below
+  // 9. Re-stamp clothing non-skin pixels (shirts/sleeves got covered by hair)
+  if (topImg) stampNonSkin(getPixels(topImg));
+  if (slImg) stampNonSkin(getPixels(slImg));
+  if (ovName) { const img = await loadImage(ovName); if (img) stampNonSkin(getPixels(img)); }
 
   // 10. Re-stamp beard FIRST (so eyes go on top of it)
   if (beardName) {
