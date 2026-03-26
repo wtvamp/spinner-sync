@@ -579,58 +579,67 @@
 
 <button class="music-btn" id="musicBtn" onclick="toggleMusic()">Music: OFF</button>
 
+<script src="/avatar-compositor.js"></script>
 <script>
 // ========================================
-// AVATARS - Pre-composited LPC pixel art portraits (OpenGameArt CC-BY-SA 3.0)
-// Professional hand-drawn pixel art with varied skin tones, hairstyles, colors
+// AVATARS - Dynamically composited from Jazzybee sprite layers
 // ========================================
 const avatarDataUrls = [];
-for (let i = 0; i < 40; i++) {
-  avatarDataUrls.push(`/portraits/avatar_${i}.png`);
-}
+let selectedAvatarId = 0;
+let avatarsReady = false;
 
-// Shuffle order so it feels different each time
-for (let i = avatarDataUrls.length - 1; i > 0; i--) {
-  const j = Math.floor(Math.random() * (i + 1));
-  [avatarDataUrls[i], avatarDataUrls[j]] = [avatarDataUrls[j], avatarDataUrls[i]];
-}
-
-// Start with a random selection
-let selectedAvatarId = Math.floor(Math.random() * avatarDataUrls.length);
-
-// Build avatar grid
+// Generate 20 random avatars on page load
+const AVATAR_COUNT = 20;
 const grid = document.getElementById('avatarGrid');
-avatarDataUrls.forEach((url, i) => {
-  const div = document.createElement('div');
-  div.className = 'avatar-option' + (i === selectedAvatarId ? ' selected' : '');
-  const img = document.createElement('img');
-  img.src = url;
-  img.width = 70;
-  img.height = 70;
-  div.appendChild(img);
-  div.onclick = () => selectAvatar(i);
-  grid.appendChild(div);
-});
+const preview = document.getElementById('avatarPreview');
 
-updatePreview(selectedAvatarId);
+// Show loading state
+grid.innerHTML = '<p style="color:#ffb6c1;font-size:10px;text-align:center;grid-column:1/-1">Generating avatars...</p>';
+
+async function initAvatars() {
+  const urls = await generateAvatars(AVATAR_COUNT);
+  avatarDataUrls.length = 0;
+  urls.forEach(u => avatarDataUrls.push(u));
+
+  grid.innerHTML = '';
+  selectedAvatarId = Math.floor(Math.random() * AVATAR_COUNT);
+
+  avatarDataUrls.forEach((url, i) => {
+    const div = document.createElement('div');
+    div.className = 'avatar-option' + (i === selectedAvatarId ? ' selected' : '');
+    const img = document.createElement('img');
+    img.src = url;
+    img.width = 70;
+    img.height = 70;
+    img.style.imageRendering = 'pixelated';
+    div.appendChild(img);
+    div.onclick = () => selectAvatar(i);
+    grid.appendChild(div);
+  });
+
+  preview.src = avatarDataUrls[selectedAvatarId];
+  avatarsReady = true;
+}
+
+initAvatars();
 
 function selectAvatar(id) {
   selectedAvatarId = id;
   document.querySelectorAll('.avatar-option').forEach((el, i) => {
     el.classList.toggle('selected', i === id);
   });
-  updatePreview(id);
+  preview.src = avatarDataUrls[id];
 }
 
-function updatePreview(id) {
-  document.getElementById('avatarPreview').src = avatarDataUrls[id];
-}
-
-function pickRandom() {
-  const id = Math.floor(Math.random() * avatarDataUrls.length);
-  selectAvatar(id);
-  // Scroll the selected one into view
-  document.querySelectorAll('.avatar-option')[id].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+async function pickRandom() {
+  // Generate a fresh random avatar and replace a random slot
+  const newUrl = await generateAvatar();
+  const slot = Math.floor(Math.random() * avatarDataUrls.length);
+  avatarDataUrls[slot] = newUrl;
+  const imgs = grid.querySelectorAll('.avatar-option img');
+  if (imgs[slot]) imgs[slot].src = newUrl;
+  selectAvatar(slot);
+  document.querySelectorAll('.avatar-option')[slot].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ========================================
