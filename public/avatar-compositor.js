@@ -127,7 +127,6 @@ function loadImage(name) {
   return new Promise((resolve) => {
     if (imageCache[name]) { resolve(imageCache[name]); return; }
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     img.onload = () => { imageCache[name] = img; resolve(img); };
     img.onerror = () => resolve(null);
     img.src = '/sprites/' + name;
@@ -171,6 +170,31 @@ async function generateAvatar() {
       if (d[i+3] === 0) continue;
       const nc = recolorPixel(d[i], d[i+1], d[i+2], skin, hair, eye, lip, isHair);
       d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
+    }
+    return imgData;
+  }
+
+  // Helper: recolor hair layer but keep skin pixels as SKIN (not hair)
+  // Only recolor actual hair-colored pixels to target hair, skin stays skin
+  function recolorHairSmart(imgData) {
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i+3] === 0) continue;
+      const r = d[i], g = d[i+1], b = d[i+2];
+      const hk = colKey(r,g,b);
+      // Hair-specific colors -> target hair palette
+      if (HAIR_SET.has(hk)) {
+        const idx = HAIR_BASE.findIndex(c => c[0]===r && c[1]===g && c[2]===b);
+        const nc = hair[Math.min(idx, hair.length-1)];
+        d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
+      } else if (r===OUTLINE[0] && g===OUTLINE[1] && b===OUTLINE[2]) {
+        // Outline -> darkest hair
+        d[i] = hair[0][0]; d[i+1] = hair[0][1]; d[i+2] = hair[0][2];
+      } else {
+        // Skin pixels -> recolor as SKIN (not hair!)
+        const nc = recolorPixel(r, g, b, skin, hair, eye, lip, false);
+        d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
+      }
     }
     return imgData;
   }
@@ -236,36 +260,24 @@ async function generateAvatar() {
   const ov = pick(OVERS);
   if (ov) { const img = await loadImage(ov); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
 
-  // 5. Hair (full layer on top - frames the face)
+  // 5. Hair (full layer on top - uses smart recolor: hair pixels -> hair, skin pixels -> skin)
   const hairImg = await loadImage(hairName);
-  if (hairImg) {
-    const hd = recolorData(getPixels(hairImg), true);
-    stamp(hd);
-  }
+  if (hairImg) { stamp(recolorHairSmart(getPixels(hairImg))); }
   const bangImg = await loadImage(bangName);
-  if (bangImg) {
-    const bd = recolorData(getPixels(bangImg), true);
-    stamp(bd);
-  }
+  if (bangImg) { stamp(recolorHairSmart(getPixels(bangImg))); }
 
   // Hair extension
   const he = pick(HAIR_EXT);
   if (he) {
     const img = await loadImage(he);
-    if (img) {
-      const hd = recolorData(getPixels(img), true);
-      stamp(hd);
-    }
+    if (img) { stamp(recolorHairSmart(getPixels(img))); }
   }
 
-  // 6. Hat (recolor hair colors in it)
+  // 6. Hat (smart recolor)
   const hat = pick(HATS);
   if (hat) {
     const img = await loadImage(hat);
-    if (img) {
-      const hd = recolorData(getPixels(img), true);
-      stamp(hd);
-    }
+    if (img) { stamp(recolorHairSmart(getPixels(img))); }
   }
 
   // 7. Glasses
