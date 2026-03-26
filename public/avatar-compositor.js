@@ -294,15 +294,37 @@ async function generateAvatar() {
   // Back hair → face shape → features → clothing → top hair/bangs
 
   // 1. BACK HAIR (bhair) - goes BEHIND face, covers crown
-  //    recolorData(true) makes skin pixels hair-colored
+  //    Only recolor actual hair-colored pixels to target hair.
+  //    Skin pixels stay as skin so they don't bleed at ears/neck.
+  function recolorHairOnly(imgData) {
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i+3] === 0) continue;
+      const r = d[i], g = d[i+1], b = d[i+2];
+      const hk = colKey(r, g, b);
+      if (HAIR_SET.has(hk)) {
+        const idx = HAIR_BASE.findIndex(c => c[0]===r && c[1]===g && c[2]===b);
+        const nc = hair[Math.min(idx, hair.length-1)];
+        d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
+      } else if (r===OUTLINE[0] && g===OUTLINE[1] && b===OUTLINE[2]) {
+        d[i] = hair[0][0]; d[i+1] = hair[0][1]; d[i+2] = hair[0][2];
+      } else {
+        // Skin pixels -> recolor as SKIN (not hair)
+        const nc = recolorPixel(r, g, b, skin, hair, eye, lip, false);
+        d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
+      }
+    }
+    return imgData;
+  }
+
   const bhairImg = await loadImage(hairName);
-  if (bhairImg) stamp(recolorData(getPixels(bhairImg), true));
+  if (bhairImg) stamp(recolorHairOnly(getPixels(bhairImg)));
 
   // Hair extension (also behind face)
   const he = pick(HAIR_EXT);
   if (he) {
     const heImg = await loadImage(he);
-    if (heImg) stamp(recolorData(getPixels(heImg), true));
+    if (heImg) stamp(recolorHairOnly(getPixels(heImg)));
   }
 
   // 2. FACE SHAPE - goes ON TOP, clips back hair with solid alpha=255 skin
@@ -361,16 +383,17 @@ async function generateAvatar() {
   if (na) { const img = await loadImage(na); if (img) stampNonSkin(getPixels(img)); }
 
   // 8. TOP HAIR / BANGS - goes on top of EVERYTHING (this is the "thair" layer)
+  //    Only recolor hair pixels, skin stays skin
   if (bangName) {
     const thairImg = await loadImage(bangName);
-    if (thairImg) stamp(recolorData(getPixels(thairImg), true));
+    if (thairImg) stamp(recolorHairOnly(getPixels(thairImg)));
   }
 
-  // 9. Hat - very top
+  // 9. Hat - very top (same approach)
   const hat = isMascHair ? pick(HATS_MASC) : pick(HATS_FEM);
   if (hat) {
     const img = await loadImage(hat);
-    if (img) stamp(recolorData(getPixels(img), true));
+    if (img) stamp(recolorHairOnly(getPixels(img)));
   }
 
   // 10. RE-STAMP facial details (eyes/brows/mouth always visible through hair/hat)
