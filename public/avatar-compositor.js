@@ -176,6 +176,12 @@ async function generateAvatar() {
   ctx.fillStyle = `rgb(${bg[0]},${bg[1]},${bg[2]})`;
   ctx.fillRect(0, 0, 64, 64);
 
+  // Pick gender early so spriteDir is available for all loads
+  const isMascHair = Math.random() < 0.35;
+  const spriteDir = isMascHair ? '/sprites-masc/' : '/sprites/';
+  const hairName = isMascHair ? pick(HAIRS_MASC) : pick(HAIRS_FEM);
+  const bangName = isMascHair ? pick(BANGS_MASC) : pick(BANGS_FEM);
+
   const faceName = pick(FACES);
   const faceImg = await loadImage(faceName, spriteDir);
 
@@ -286,11 +292,7 @@ async function generateAvatar() {
     stamp(detail);
   }
 
-  // Pick gender presentation first (~35% masc), then pick from appropriate pool
-  const isMascHair = Math.random() < 0.35;
-  const spriteDir = isMascHair ? '/sprites-masc/' : '/sprites/';
-  const hairName = isMascHair ? pick(HAIRS_MASC) : pick(HAIRS_FEM);
-  const bangName = isMascHair ? pick(BANGS_MASC) : pick(BANGS_FEM);
+  // (gender, spriteDir, hairName, bangName already picked above)
 
   // === COMPOSITING ORDER (from Jazzybee creator source) ===
   // Back hair → face shape → features → clothing → top hair/bangs
