@@ -285,9 +285,9 @@ async function generateAvatar() {
     stamp(detail);
   }
 
-  // Pre-load hair layers
-  const hairName = pick(HAIRS);
-  const isMascHair = HAIRS_MASC.includes(hairName);
+  // Pick gender presentation first (~35% masc), then pick from appropriate pool
+  const isMascHair = Math.random() < 0.35;
+  const hairName = isMascHair ? pick(HAIRS_MASC) : pick(HAIRS_FEM);
   const bangName = isMascHair ? pick(BANGS_MASC) : pick(BANGS_FEM);
 
   // === COMPOSITING ORDER (from Jazzybee creator source) ===
