@@ -263,7 +263,7 @@ async function generateAvatar() {
   // 5. Hair - first paint a solid hair-color fill under the crown,
   // then layer the detailed hair strands on top with smart recolor
   // This prevents the "bald" look where skin shows through hair gaps
-  if (hairImg || bangImg) {
+  {
     // Paint hair-colored base across the top of the head where hair should be
     // Use the mid-tone of the hair palette
     const hairMid = hair[Math.floor(hair.length / 2)];
