@@ -176,9 +176,56 @@ for i in range(40):
 
     comp = Image.new('RGBA', (64,64), bg+(255,))
 
-    # 1. Face shape - full recolor
+    # Pre-load and recolor hair layers (we'll split them into back/front)
     face_name = random.choice(FACES)
     face_arr = load64(face_name)
+
+    # Create face mask (where the face has opaque pixels)
+    face_mask = set()
+    if face_arr is not None:
+        for y in range(64):
+            for x in range(64):
+                if face_arr[y,x,3] > 0:
+                    face_mask.add((x,y))
+
+    def recolor_hair_layer(name):
+        arr = load64(name)
+        if arr is None: return None
+        for y in range(64):
+            for x in range(64):
+                if arr[y,x,3] > 0:
+                    arr[y,x,:3] = recolor_pixel(arr[y,x,:3], skin, hair, eye, lip, is_hair=True)
+        return arr
+
+    def split_hair(arr):
+        """Split hair into back (outside face) and front (overlapping face)."""
+        if arr is None: return None, None
+        back = np.zeros_like(arr)
+        front = np.zeros_like(arr)
+        for y in range(64):
+            for x in range(64):
+                if arr[y,x,3] > 0:
+                    if (x,y) in face_mask:
+                        front[y,x] = arr[y,x]
+                    else:
+                        back[y,x] = arr[y,x]
+        return back, front
+
+    h_name = random.choice(HAIRS)
+    hair_arr = recolor_hair_layer(h_name)
+    hair_back, hair_front = split_hair(hair_arr)
+
+    b_name = random.choice(BANGS)
+    bang_arr = recolor_hair_layer(b_name)
+    bang_back, bang_front = split_hair(bang_arr)
+
+    # 1. BACK HAIR (behind the face - sides, below shoulders)
+    if hair_back is not None:
+        comp = Image.alpha_composite(comp, Image.fromarray(hair_back))
+    if bang_back is not None:
+        comp = Image.alpha_composite(comp, Image.fromarray(bang_back))
+
+    # 2. Face shape - full recolor
     if face_arr is not None:
         rc = face_arr.copy()
         for y in range(64):
@@ -187,7 +234,7 @@ for i in range(40):
                     rc[y,x,:3] = recolor_pixel(rc[y,x,:3], skin, hair, eye, lip)
         comp = Image.alpha_composite(comp, Image.fromarray(rc))
 
-    # 2. Facial features - ONLY stamp detail (non-skin) pixels
+    # 3. Facial features - ONLY stamp detail (non-skin) pixels
     features = [
         (random.choice(EYES), False),
         (random.choice(BROWS), True),  # brows use hair color
@@ -222,24 +269,11 @@ for i in range(40):
         arr = load64(ov)
         if arr is not None: comp = Image.alpha_composite(comp, Image.fromarray(arr))
 
-    # 4. Hair - full recolor to hair color
-    h_name = random.choice(HAIRS)
-    arr = load64(h_name)
-    if arr is not None:
-        for y in range(64):
-            for x in range(64):
-                if arr[y,x,3] > 0:
-                    arr[y,x,:3] = recolor_pixel(arr[y,x,:3], skin, hair, eye, lip, is_hair=True)
-        comp = Image.alpha_composite(comp, Image.fromarray(arr))
-
-    b_name = random.choice(BANGS)
-    arr = load64(b_name)
-    if arr is not None:
-        for y in range(64):
-            for x in range(64):
-                if arr[y,x,3] > 0:
-                    arr[y,x,:3] = recolor_pixel(arr[y,x,:3], skin, hair, eye, lip, is_hair=True)
-        comp = Image.alpha_composite(comp, Image.fromarray(arr))
+    # 4. FRONT HAIR (overlapping face - frames the face, covers forehead)
+    if hair_front is not None:
+        comp = Image.alpha_composite(comp, Image.fromarray(hair_front))
+    if bang_front is not None:
+        comp = Image.alpha_composite(comp, Image.fromarray(bang_front))
 
     he = pick_existing(HAIR_EXT)
     if he:
@@ -290,36 +324,22 @@ for i in range(40):
         arr = load64(na)
         if arr is not None: comp = Image.alpha_composite(comp, Image.fromarray(arr))
 
-    # 9. Re-stamp facial feature detail pixels ON TOP of everything
-    # (The feature layers' detail pixels got covered by hair/clothing layers)
-    # We re-apply ONLY the non-skin detail pixels from each feature
+    # 9. Re-stamp ALL facial feature detail pixels ON TOP of everything
+    # Eyes, brows, mouth details are tiny (29 eye px, 16 lip px, 14 brow px)
+    # Always stamp them - they should always be visible
+    stamp = np.zeros((64,64,4), dtype=np.uint8)
     for feat_name, is_h in features:
         arr = load64(feat_name)
         if arr is None: continue
-        stamp = np.zeros((64,64,4), dtype=np.uint8)
         for y in range(64):
             for x in range(64):
                 if arr[y,x,3] > 0:
                     c = (int(arr[y,x,0]),int(arr[y,x,1]),int(arr[y,x,2]))
-                    if c in DETAIL_COLORS:  # only true detail (outline, iris, lip) - NOT hair
-                        stamp[y,x,:3] = recolor_pixel(arr[y,x,:3], skin, hair, eye, lip, is_h)
+                    if c in DETAIL_COLORS:
+                        nc = recolor_pixel(arr[y,x,:3], skin, hair, eye, lip, is_h)
+                        stamp[y,x,0], stamp[y,x,1], stamp[y,x,2] = nc[0], nc[1], nc[2]
                         stamp[y,x,3] = 255
-        # Only stamp pixels that aren't covered by hair (check if comp pixel is hair-colored)
-        comp_arr = np.array(comp)
-        for y in range(64):
-            for x in range(64):
-                if stamp[y,x,3] > 0:
-                    # Check if this position is covered by hair
-                    comp_c = tuple(comp_arr[y,x,:3].tolist())
-                    # If the comp pixel is a hair color, skip (hair covers face)
-                    is_hair_pixel = False
-                    for hc in hair:
-                        if sum((a-b)**2 for a,b in zip(comp_c,hc)) < 2000:
-                            is_hair_pixel = True; break
-                    if not is_hair_pixel:
-                        comp_arr[y,x,:3] = stamp[y,x,:3]
-                        comp_arr[y,x,3] = 255
-        comp = Image.fromarray(comp_arr)
+    comp = Image.alpha_composite(comp, Image.fromarray(stamp))
 
     # Upscale 64->256 with crisp pixels
     comp = comp.resize((256,256), Image.NEAREST)
