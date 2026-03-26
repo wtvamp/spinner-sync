@@ -286,24 +286,25 @@ async function generateAvatar() {
     }
     stamp(hairFill);
   }
-  // Now layer the actual hair strands (skin pixels stay as skin, hair pixels show as hair)
+  // Layer the actual hair strands - use full recolor (skin->hair) so the
+  // entire hair layer shows as hair-colored. This gives full coverage.
   const hairImg2 = await loadImage(hairName);
-  if (hairImg2) { stamp(recolorHairSmart(getPixels(hairImg2))); }
+  if (hairImg2) { stamp(recolorData(getPixels(hairImg2), true)); }
   const bangImg2 = await loadImage(bangName);
-  if (bangImg2) { stamp(recolorHairSmart(getPixels(bangImg2))); }
+  if (bangImg2) { stamp(recolorData(getPixels(bangImg2), true)); }
 
   // Hair extension
   const he = pick(HAIR_EXT);
   if (he) {
     const img = await loadImage(he);
-    if (img) { stamp(recolorHairSmart(getPixels(img))); }
+    if (img) { stamp(recolorData(getPixels(img), true)); }
   }
 
-  // 6. Hat (smart recolor)
+  // 6. Hat (full recolor - hair colors become target hair)
   const hat = pick(HATS);
   if (hat) {
     const img = await loadImage(hat);
-    if (img) { stamp(recolorHairSmart(getPixels(img))); }
+    if (img) { stamp(recolorData(getPixels(img), true)); }
   }
 
   // 7. Glasses
