@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prize Spinner!</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1a0e2e;
+    font-family: 'Press Start 2P', cursive;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    image-rendering: pixelated;
+  }
+
+  .stars-container {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .star {
+    position: absolute;
+    background: #fff;
+    border-radius: 50%;
+    animation: twinkle var(--dur) ease-in-out infinite;
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.2; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.5); }
+  }
+
+  .flower {
+    position: fixed;
+    font-size: 24px;
+    animation: floatUp var(--dur) linear infinite;
+    opacity: 0.7;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  @keyframes floatUp {
+    0% { transform: translateY(110vh) rotate(0deg); opacity: 0; }
+    10% { opacity: 0.7; }
+    90% { opacity: 0.7; }
+    100% { transform: translateY(-10vh) rotate(360deg); opacity: 0; }
+  }
+
+  .firefly {
+    position: fixed;
+    width: 6px;
+    height: 6px;
+    background: #ffe066;
+    border-radius: 50%;
+    box-shadow: 0 0 8px 4px rgba(255, 224, 102, 0.6);
+    animation: fireflyMove var(--dur) ease-in-out infinite;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  @keyframes fireflyMove {
+    0% { transform: translate(0, 0); opacity: 0; }
+    15% { opacity: 1; }
+    50% { transform: translate(var(--dx), var(--dy)); opacity: 0.6; }
+    85% { opacity: 1; }
+    100% { transform: translate(var(--dx2), var(--dy2)); opacity: 0; }
+  }
+
+  .title {
+    color: #ffd700;
+    font-size: 28px;
+    text-shadow: 3px 3px 0 #8b4513, -1px -1px 0 #ff69b4;
+    margin-bottom: 20px;
+    z-index: 10;
+    text-align: center;
+    line-height: 1.6;
+    animation: titleBounce 2s ease-in-out infinite;
+  }
+
+  @keyframes titleBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+
+  .viewer-count {
+    color: #84fab0;
+    font-size: 10px;
+    margin-bottom: 15px;
+    z-index: 10;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+  }
+
+  .spinner-wrapper {
+    position: relative;
+    z-index: 10;
+  }
+
+  .arrow {
+    position: absolute;
+    top: 50%;
+    right: -30px;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-top: 20px solid transparent;
+    border-bottom: 20px solid transparent;
+    border-right: 35px solid #ffd700;
+    filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.8));
+    z-index: 20;
+  }
+
+  canvas {
+    border-radius: 50%;
+    box-shadow:
+      0 0 30px rgba(255, 182, 193, 0.5),
+      0 0 60px rgba(147, 112, 219, 0.3),
+      inset 0 0 30px rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: box-shadow 0.3s;
+  }
+
+  canvas:hover {
+    box-shadow:
+      0 0 40px rgba(255, 182, 193, 0.7),
+      0 0 80px rgba(147, 112, 219, 0.5),
+      inset 0 0 30px rgba(255, 255, 255, 0.2);
+  }
+
+  .spin-btn {
+    margin-top: 25px;
+    padding: 15px 40px;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 16px;
+    background: linear-gradient(180deg, #ff9a9e, #e8637a);
+    color: #fff;
+    border: 4px solid #ffd700;
+    border-radius: 12px;
+    cursor: pointer;
+    z-index: 10;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+    box-shadow: 0 6px 0 #b8445a, 0 8px 20px rgba(0,0,0,0.3);
+    transition: all 0.1s;
+    position: relative;
+  }
+
+  .spin-btn:hover {
+    background: linear-gradient(180deg, #ffb3b7, #ff7b93);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 0 #b8445a, 0 10px 25px rgba(0,0,0,0.3);
+  }
+
+  .spin-btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #b8445a, 0 3px 10px rgba(0,0,0,0.3);
+  }
+
+  .spin-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .winner-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(26, 14, 46, 0.92);
+    z-index: 100;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.5s;
+  }
+
+  .winner-overlay.show { display: flex; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .winner-text {
+    font-size: 18px;
+    color: #ffb6c1;
+    margin-bottom: 15px;
+    text-shadow: 2px 2px 0 #8b4513;
+  }
+
+  .winner-name {
+    font-size: 42px;
+    color: #ffd700;
+    text-shadow: 3px 3px 0 #8b4513, 0 0 30px rgba(255, 215, 0, 0.6);
+    animation: winnerPop 0.6s ease-out, winnerGlow 1.5s ease-in-out infinite 0.6s;
+    margin-bottom: 20px;
+  }
+
+  @keyframes winnerPop {
+    0% { transform: scale(0); opacity: 0; }
+    60% { transform: scale(1.3); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes winnerGlow {
+    0%, 100% { text-shadow: 3px 3px 0 #8b4513, 0 0 30px rgba(255, 215, 0, 0.6); }
+    50% { text-shadow: 3px 3px 0 #8b4513, 0 0 60px rgba(255, 215, 0, 0.9), 0 0 90px rgba(255, 182, 193, 0.5); }
+  }
+
+  .winner-sparkles {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .sparkle {
+    position: absolute;
+    font-size: 28px;
+    animation: sparkleFloat var(--dur) linear infinite;
+  }
+
+  @keyframes sparkleFloat {
+    0% { transform: translateY(0) rotate(0) scale(0); opacity: 0; }
+    20% { opacity: 1; transform: scale(1); }
+    80% { opacity: 1; }
+    100% { transform: translateY(-200px) rotate(720deg) scale(0); opacity: 0; }
+  }
+
+  .close-btn {
+    margin-top: 20px;
+    padding: 12px 30px;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 12px;
+    background: linear-gradient(180deg, #9b59b6, #7d3c98);
+    color: #fff;
+    border: 3px solid #ffd700;
+    border-radius: 10px;
+    cursor: pointer;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+    box-shadow: 0 4px 0 #5b2c6f;
+    transition: all 0.1s;
+  }
+
+  .close-btn:hover {
+    background: linear-gradient(180deg, #af7ac5, #9b59b6);
+    transform: translateY(-2px);
+  }
+
+  .close-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #5b2c6f;
+  }
+
+  .grass {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background:
+      repeating-linear-gradient(90deg,
+        #3a7d44 0px, #3a7d44 8px,
+        #2d6b35 8px, #2d6b35 16px,
+        #4a9d54 16px, #4a9d54 24px,
+        #2d6b35 24px, #2d6b35 32px);
+    z-index: 5;
+    image-rendering: pixelated;
+  }
+
+  .grass::before {
+    content: '';
+    position: absolute;
+    top: -12px;
+    left: 0;
+    right: 0;
+    height: 12px;
+    background:
+      repeating-linear-gradient(90deg,
+        transparent 0px, transparent 4px,
+        #3a7d44 4px, #3a7d44 8px,
+        transparent 8px, transparent 16px,
+        #4a9d54 16px, #4a9d54 20px,
+        transparent 20px, transparent 28px,
+        #2d6b35 28px, #2d6b35 32px);
+  }
+
+  .music-btn {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    padding: 8px 12px;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 10px;
+    background: rgba(147, 112, 219, 0.5);
+    color: #ffd700;
+    border: 2px solid #ffd700;
+    border-radius: 8px;
+    cursor: pointer;
+    z-index: 50;
+  }
+
+  .status {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    padding: 6px 10px;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 8px;
+    color: #84fab0;
+    z-index: 50;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+  }
+
+  .status .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #84fab0;
+    margin-right: 6px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stars-container" id="stars"></div>
+<div id="flowers"></div>
+<div id="fireflies"></div>
+
+<div class="status"><span class="dot"></span><span id="viewerCount">1 watching</span></div>
+
+<div class="title">Prize Drawing!</div>
+
+<div class="spinner-wrapper">
+  <div class="arrow"></div>
+  <canvas id="wheel" width="400" height="400"></canvas>
+</div>
+
+<button class="spin-btn" id="spinBtn" onclick="requestSpin()">SPIN!</button>
+
+<div class="winner-overlay" id="winnerOverlay">
+  <div class="winner-sparkles" id="winnerSparkles"></div>
+  <div class="winner-text">The winner is...</div>
+  <div class="winner-name" id="winnerName"></div>
+  <button class="close-btn" onclick="closeOverlay()">Spin Again!</button>
+</div>
+
+<div class="grass"></div>
+
+<button class="music-btn" id="musicBtn" onclick="toggleMusic()">Music: OFF</button>
+
+<script>
+// ---- SOCKET.IO ----
+const socket = io();
+
+socket.on('connect', () => console.log('Connected to server'));
+
+socket.on('viewerCount', (count) => {
+  document.getElementById('viewerCount').textContent = count + ' watching';
+});
+
+// When server says SPIN, everyone spins with the same parameters
+socket.on('spin', (data) => {
+  doSpin(data.extraRotations, data.randomSegment, data.duration);
+});
+
+function requestSpin() {
+  if (spinning) return;
+  socket.emit('requestSpin');
+}
+
+// ---- CONFIG ----
+const names = ['Gwen', 'Juliana', 'Natalie', 'America', 'Madeline'];
+const colors = [
+  ['#ff9a9e', '#fad0c4'],
+  ['#a18cd1', '#fbc2eb'],
+  ['#84fab0', '#8fd3f4'],
+  ['#ffecd2', '#fcb69f'],
+  ['#fdcbf1', '#e6dee9'],
+];
+const emojis = ['\u273F', '\u2740', '\u273E', '\u2741', '\u273D'];
+
+// ---- BACKGROUND ELEMENTS ----
+const starsEl = document.getElementById('stars');
+for (let i = 0; i < 80; i++) {
+  const star = document.createElement('div');
+  star.className = 'star';
+  const size = Math.random() * 3 + 1;
+  star.style.cssText = `
+    width: ${size}px; height: ${size}px;
+    top: ${Math.random() * 100}%; left: ${Math.random() * 100}%;
+    --dur: ${Math.random() * 3 + 2}s;
+    animation-delay: ${Math.random() * 3}s;
+  `;
+  starsEl.appendChild(star);
+}
+
+const flowersEl = document.getElementById('flowers');
+const flowerChars = ['\u2740', '\u273F', '\u2741', '\u273E', '\u273D', '\u2665'];
+for (let i = 0; i < 12; i++) {
+  const flower = document.createElement('div');
+  flower.className = 'flower';
+  flower.textContent = flowerChars[i % flowerChars.length];
+  flower.style.cssText = `
+    left: ${Math.random() * 100}%;
+    --dur: ${Math.random() * 10 + 12}s;
+    animation-delay: ${Math.random() * 15}s;
+    font-size: ${Math.random() * 16 + 16}px;
+    color: ${['#ff9a9e','#a18cd1','#84fab0','#ffd700','#ffb6c1','#fcb69f'][i % 6]};
+  `;
+  flowersEl.appendChild(flower);
+}
+
+const firefliesEl = document.getElementById('fireflies');
+for (let i = 0; i < 15; i++) {
+  const ff = document.createElement('div');
+  ff.className = 'firefly';
+  ff.style.cssText = `
+    top: ${Math.random() * 80 + 10}%; left: ${Math.random() * 100}%;
+    --dur: ${Math.random() * 6 + 4}s;
+    --dx: ${(Math.random() - 0.5) * 200}px;
+    --dy: ${(Math.random() - 0.5) * 200}px;
+    --dx2: ${(Math.random() - 0.5) * 300}px;
+    --dy2: ${(Math.random() - 0.5) * 300}px;
+    animation-delay: ${Math.random() * 6}s;
+  `;
+  firefliesEl.appendChild(ff);
+}
+
+// ---- WHEEL ----
+const canvas = document.getElementById('wheel');
+const ctx = canvas.getContext('2d');
+const segments = names.length;
+const segAngle = (2 * Math.PI) / segments;
+let currentAngle = 0;
+let spinning = false;
+
+function drawWheel(angle) {
+  ctx.clearRect(0, 0, 400, 400);
+  ctx.save();
+  ctx.translate(200, 200);
+  ctx.rotate(angle);
+
+  for (let i = 0; i < segments; i++) {
+    const startAngle = i * segAngle;
+    const endAngle = startAngle + segAngle;
+
+    const grad = ctx.createRadialGradient(0, 0, 30, 0, 0, 190);
+    grad.addColorStop(0, colors[i][1]);
+    grad.addColorStop(1, colors[i][0]);
+
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 190, startAngle, endAngle);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.rotate(startAngle + segAngle / 2);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#2c1810';
+    ctx.font = '600 15px "Press Start 2P"';
+    ctx.fillText(names[i], 110, 5);
+
+    ctx.font = '18px serif';
+    ctx.fillText(emojis[i], 170, 5);
+    ctx.restore();
+  }
+
+  const centerGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, 28);
+  centerGrad.addColorStop(0, '#fff');
+  centerGrad.addColorStop(1, '#ffd700');
+  ctx.beginPath();
+  ctx.arc(0, 0, 28, 0, 2 * Math.PI);
+  ctx.fillStyle = centerGrad;
+  ctx.fill();
+  ctx.strokeStyle = '#8b4513';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.font = '20px serif';
+  ctx.fillStyle = '#ff69b4';
+  ctx.textAlign = 'center';
+  ctx.fillText('\u2605', 0, 7);
+
+  ctx.restore();
+}
+
+drawWheel(0);
+
+// ---- AUDIO ----
+let audioCtx = null;
+let musicPlaying = false;
+let musicInterval = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playNote(freq, startTime, duration, type = 'square', vol = 0.08) {
+  const ac = getAudioCtx();
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+  osc.connect(gain);
+  gain.connect(ac.destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration);
+}
+
+const melody = [
+  392, 440, 494, 523, 494, 440, 392, 330,
+  294, 330, 392, 440, 392, 330, 294, 262,
+  330, 392, 440, 523, 587, 523, 440, 392,
+  440, 392, 330, 294, 330, 392, 440, 392,
+];
+
+const bassLine = [
+  262, 262, 330, 330, 294, 294, 262, 262,
+  220, 220, 262, 262, 247, 247, 220, 220,
+  262, 262, 330, 330, 349, 349, 330, 330,
+  294, 294, 262, 262, 247, 247, 262, 262,
+];
+
+function playMusic() {
+  const ac = getAudioCtx();
+  const noteLen = 0.22;
+
+  function scheduleLoop() {
+    const loopStart = ac.currentTime + 0.05;
+    for (let i = 0; i < melody.length; i++) {
+      const t = loopStart + i * noteLen;
+      playNote(melody[i], t, noteLen * 0.9, 'square', 0.06);
+      if (i % 2 === 0) playNote(bassLine[i], t, noteLen * 1.8, 'triangle', 0.07);
+      if (i % 8 === 0) playNote(melody[i] * 2, t, noteLen * 0.3, 'sine', 0.03);
+    }
+    return melody.length * noteLen * 1000;
+  }
+
+  const dur = scheduleLoop();
+  musicInterval = setInterval(scheduleLoop, dur);
+}
+
+function stopMusic() {
+  if (musicInterval) { clearInterval(musicInterval); musicInterval = null; }
+}
+
+function toggleMusic() {
+  const btn = document.getElementById('musicBtn');
+  if (!musicPlaying) {
+    playMusic();
+    btn.textContent = 'Music: ON';
+    musicPlaying = true;
+  } else {
+    stopMusic();
+    btn.textContent = 'Music: OFF';
+    musicPlaying = false;
+  }
+}
+
+function playSpinTick() {
+  const ac = getAudioCtx();
+  playNote(600 + Math.random() * 400, ac.currentTime, 0.05, 'square', 0.05);
+}
+
+function playWinSound() {
+  const ac = getAudioCtx();
+  const t = ac.currentTime;
+  playNote(523, t, 0.15, 'square', 0.1);
+  playNote(659, t + 0.15, 0.15, 'square', 0.1);
+  playNote(784, t + 0.3, 0.15, 'square', 0.1);
+  playNote(1047, t + 0.45, 0.4, 'square', 0.12);
+  playNote(1568, t + 0.5, 0.3, 'sine', 0.06);
+  playNote(2093, t + 0.6, 0.4, 'sine', 0.04);
+}
+
+// ---- SYNCED SPIN ----
+function doSpin(extraRotations, randomSegment, duration) {
+  if (spinning) return;
+  spinning = true;
+  document.getElementById('spinBtn').disabled = true;
+
+  getAudioCtx(); // ensure audio context
+
+  const targetAngle = currentAngle + extraRotations + randomSegment;
+  const startAngle = currentAngle;
+  const totalAngle = targetAngle - startAngle;
+  const startTime = performance.now();
+  let lastTickAngle = startAngle;
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const angle = startAngle + totalAngle * eased;
+
+    drawWheel(angle);
+
+    const segsPassed = Math.floor(angle / segAngle);
+    const lastSegs = Math.floor(lastTickAngle / segAngle);
+    if (segsPassed !== lastSegs && progress < 0.95) playSpinTick();
+    lastTickAngle = angle;
+
+    if (progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      currentAngle = angle % (2 * Math.PI);
+      const normalizedAngle = (2 * Math.PI - currentAngle % (2 * Math.PI)) % (2 * Math.PI);
+      const winnerIndex = Math.floor(normalizedAngle / segAngle) % segments;
+
+      setTimeout(() => {
+        showWinner(names[winnerIndex]);
+        spinning = false;
+        document.getElementById('spinBtn').disabled = false;
+      }, 300);
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+
+// ---- WINNER DISPLAY ----
+function showWinner(name) {
+  playWinSound();
+  const overlay = document.getElementById('winnerOverlay');
+  document.getElementById('winnerName').textContent = name;
+  overlay.classList.add('show');
+
+  const sparklesEl = document.getElementById('winnerSparkles');
+  sparklesEl.innerHTML = '';
+  const celebChars = ['\u2728', '\u2B50', '\uD83D\uDC96', '\uD83C\uDF1F', '\uD83C\uDF89', '\uD83D\uDCAB', '\uD83C\uDF38', '\uD83C\uDF80', '\uD83D\uDC9C', '\u273F'];
+  for (let i = 0; i < 30; i++) {
+    const sp = document.createElement('div');
+    sp.className = 'sparkle';
+    sp.textContent = celebChars[i % celebChars.length];
+    sp.style.cssText = `
+      left: ${Math.random() * 100}%;
+      top: ${Math.random() * 100}%;
+      --dur: ${Math.random() * 2 + 1.5}s;
+      animation-delay: ${Math.random() * 2}s;
+    `;
+    sparklesEl.appendChild(sp);
+  }
+}
+
+function closeOverlay() {
+  document.getElementById('winnerOverlay').classList.remove('show');
+}
+
+canvas.addEventListener('click', requestSpin);
+</script>
+</body>
+</html>
