@@ -92,14 +92,6 @@
     50% { transform: translateY(-5px); }
   }
 
-  .viewer-count {
-    color: #84fab0;
-    font-size: 10px;
-    margin-bottom: 15px;
-    z-index: 10;
-    text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
-  }
-
   .spinner-wrapper {
     position: relative;
     z-index: 10;
@@ -119,7 +111,7 @@
     z-index: 20;
   }
 
-  canvas {
+  canvas#wheel {
     border-radius: 50%;
     box-shadow:
       0 0 30px rgba(255, 182, 193, 0.5),
@@ -129,7 +121,7 @@
     transition: box-shadow 0.3s;
   }
 
-  canvas:hover {
+  canvas#wheel:hover {
     box-shadow:
       0 0 40px rgba(255, 182, 193, 0.7),
       0 0 80px rgba(147, 112, 219, 0.5),
@@ -321,7 +313,7 @@
     background: rgba(26, 14, 46, 0.75);
     border: 2px solid rgba(132, 250, 176, 0.3);
     border-radius: 10px;
-    max-width: 220px;
+    max-width: 240px;
   }
 
   .viewer-panel .panel-title {
@@ -338,21 +330,20 @@
   }
 
   .viewer-list li {
-    padding: 3px 0;
+    padding: 4px 0;
     color: #ffb6c1;
     font-size: 8px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
   }
 
-  .viewer-list li .dot {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #84fab0;
-    animation: pulse 1.5s ease-in-out infinite;
+  .viewer-list li img {
+    width: 24px;
+    height: 24px;
+    image-rendering: pixelated;
+    border: 1px solid rgba(255,215,0,0.4);
+    border-radius: 3px;
     flex-shrink: 0;
   }
 
@@ -383,8 +374,8 @@
     100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
   }
 
-  /* Name entry modal */
-  .name-modal {
+  /* Modals */
+  .modal {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(26, 14, 46, 0.95);
@@ -396,9 +387,9 @@
     gap: 20px;
   }
 
-  .name-modal.hidden { display: none; }
+  .modal.hidden { display: none; }
 
-  .name-modal h2 {
+  .modal h2 {
     color: #ffd700;
     font-family: 'Press Start 2P', cursive;
     font-size: 20px;
@@ -407,7 +398,7 @@
     line-height: 1.8;
   }
 
-  .name-modal p {
+  .modal p {
     color: #ffb6c1;
     font-family: 'Press Start 2P', cursive;
     font-size: 10px;
@@ -438,7 +429,7 @@
     box-shadow: 0 0 20px rgba(255, 105, 180, 0.4);
   }
 
-  .join-btn {
+  .modal-btn {
     padding: 12px 35px;
     font-family: 'Press Start 2P', cursive;
     font-size: 14px;
@@ -451,15 +442,65 @@
     transition: all 0.1s;
   }
 
-  .join-btn:hover {
+  .modal-btn:hover {
     background: linear-gradient(180deg, #a0ffc8, #84fab0);
     transform: translateY(-2px);
     box-shadow: 0 7px 0 #3a9d6a, 0 9px 20px rgba(0,0,0,0.3);
   }
 
-  .join-btn:active {
+  .modal-btn:active {
     transform: translateY(3px);
     box-shadow: 0 2px 0 #3a9d6a;
+  }
+
+  /* Avatar grid */
+  .avatar-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 64px);
+    gap: 10px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  .avatar-option {
+    width: 64px;
+    height: 64px;
+    border: 3px solid rgba(255, 215, 0, 0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px;
+    transition: all 0.15s;
+    image-rendering: pixelated;
+  }
+
+  .avatar-option:hover {
+    border-color: #ff69b4;
+    transform: scale(1.1);
+    background: rgba(255, 105, 180, 0.15);
+  }
+
+  .avatar-option.selected {
+    border-color: #ffd700;
+    background: rgba(255, 215, 0, 0.2);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+    transform: scale(1.1);
+  }
+
+  .avatar-option canvas {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+
+  .selected-preview {
+    width: 80px;
+    height: 80px;
+    image-rendering: pixelated;
+    border: 3px solid #ffd700;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
   }
 </style>
 </head>
@@ -469,12 +510,20 @@
 <div id="flowers"></div>
 <div id="fireflies"></div>
 
-<!-- Name entry modal -->
-<div class="name-modal" id="nameModal">
+<!-- Step 1: Name entry -->
+<div class="modal" id="nameModal">
   <h2>Prize Drawing!</h2>
   <p>Enter your name to join</p>
   <input type="text" class="name-input" id="nameInput" placeholder="Your name..." maxlength="20" autocomplete="off">
-  <button class="join-btn" id="joinBtn" onclick="joinRoom()">JOIN</button>
+  <button class="modal-btn" onclick="goToAvatarSelect()">NEXT</button>
+</div>
+
+<!-- Step 2: Avatar selection -->
+<div class="modal hidden" id="avatarModal">
+  <h2>Choose Your Avatar!</h2>
+  <canvas class="selected-preview" id="avatarPreview" width="32" height="32"></canvas>
+  <div class="avatar-grid" id="avatarGrid"></div>
+  <button class="modal-btn" onclick="joinRoom()">JOIN</button>
 </div>
 
 <div class="viewer-panel" id="viewerPanel">
@@ -503,26 +552,209 @@
 <button class="music-btn" id="musicBtn" onclick="toggleMusic()">Music: OFF</button>
 
 <script>
-// ---- SOCKET.IO ----
-const socket = io({ transports: ['websocket'] });
+// ========================================
+// PIXEL ART AVATAR GENERATOR
+// ========================================
+const AVATAR_SIZE = 32;
+const avatarDataUrls = [];
+
+const skinTones = ['#ffdbb4','#f5c8a0','#e8b48a','#c68c5c','#a0674b','#7a4b32'];
+const hairColors = ['#3b1f0b','#6b3a1f','#c4722a','#e8c44a','#d64040','#ff69b4','#9b59b6','#3498db','#1abc9c','#2c3e50'];
+const eyeColors = ['#2c3e50','#2980b9','#27ae60','#8e44ad','#c0392b'];
+const shirtColors = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#ff69b4','#00bcd4','#ff5252'];
+
+// Hair styles: each is an array of [x,y] pixel positions relative to the head top
+const hairStyles = [
+  // 0: long straight
+  { type: 'long', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x-1,y,16,4); c.fillRect(x-1,y+4,3,12); c.fillRect(x+12,y+4,3,12); c.fillRect(x,y,14,3); }},
+  // 1: bob
+  { type: 'bob', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x-1,y,16,4); c.fillRect(x-1,y+4,3,8); c.fillRect(x+12,y+4,3,8); c.fillRect(x,y,14,3); }},
+  // 2: ponytail
+  { type: 'pony', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x,y,14,3); c.fillRect(x-1,y,16,2); c.fillRect(x+12,y+2,4,2); c.fillRect(x+14,y+4,3,10); }},
+  // 3: pigtails
+  { type: 'pigtails', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x,y,14,3); c.fillRect(x-2,y+2,4,2); c.fillRect(x+12,y+2,4,2); c.fillRect(x-3,y+4,3,8); c.fillRect(x+14,y+4,3,8); }},
+  // 4: short
+  { type: 'short', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x,y,14,4); c.fillRect(x-1,y+1,16,2); }},
+  // 5: curly
+  { type: 'curly', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x-1,y-1,16,3); c.fillRect(x-2,y+2,3,10); c.fillRect(x+13,y+2,3,10); c.fillRect(x,y,14,3); for(let i=0;i<3;i++){c.fillRect(x-2+(i*2),y+11,2,2);c.fillRect(x+11+(i*2),y+11,2,2);} }},
+  // 6: bun
+  { type: 'bun', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x,y,14,3); c.fillRect(x+4,y-4,6,5); c.fillRect(x+3,y-3,8,4); }},
+  // 7: side swept
+  { type: 'side', draw: (c,x,y,col) => { c.fillStyle=col; c.fillRect(x,y,14,3); c.fillRect(x-2,y+1,6,3); c.fillRect(x-2,y+4,3,6); }},
+];
+
+// Accessories
+const accessories = [
+  null, // none
+  { type: 'bow', draw: (c,x,y,col) => { c.fillStyle='#ff69b4'; c.fillRect(x+9,y-1,2,2); c.fillRect(x+7,y-2,2,2); c.fillRect(x+11,y-2,2,2); }},
+  { type: 'flower', draw: (c,x,y) => { c.fillStyle='#ff6b6b'; c.fillRect(x+10,y,3,3); c.fillStyle='#ffd700'; c.fillRect(x+11,y+1,1,1); }},
+  { type: 'star', draw: (c,x,y) => { c.fillStyle='#ffd700'; c.fillRect(x+10,y-1,1,3); c.fillRect(x+9,y,3,1); }},
+  { type: 'heart', draw: (c,x,y) => { c.fillStyle='#ff69b4'; c.fillRect(x-3,y+2,2,2); c.fillRect(x-1,y+3,2,2); c.fillRect(x-4,y+3,2,2); c.fillRect(x-2,y+4,2,1); }},
+  null, null, null, // more "none" to make accessories less common
+];
+
+function generateAvatar(seed) {
+  const c = document.createElement('canvas');
+  c.width = AVATAR_SIZE;
+  c.height = AVATAR_SIZE;
+  const ctx = c.getContext('2d');
+
+  // Deterministic random from seed
+  let s = seed * 2654435761 >>> 0;
+  function r(){ s ^= s<<13; s ^= s>>17; s ^= s<<5; return (s>>>0) / 4294967296; }
+
+  const skin = skinTones[Math.floor(r() * skinTones.length)];
+  const hair = hairColors[Math.floor(r() * hairColors.length)];
+  const eyes = eyeColors[Math.floor(r() * eyeColors.length)];
+  const shirt = shirtColors[Math.floor(r() * shirtColors.length)];
+  const hairStyle = hairStyles[Math.floor(r() * hairStyles.length)];
+  const accessory = accessories[Math.floor(r() * accessories.length)];
+  const hasBlush = r() > 0.4;
+
+  const ox = 9; // offset x (center the 14px wide face in 32px)
+  const oy = 6; // offset y
+
+  // Neck
+  ctx.fillStyle = skin;
+  ctx.fillRect(ox+5, oy+14, 4, 3);
+
+  // Shirt / body
+  ctx.fillStyle = shirt;
+  ctx.fillRect(ox+1, oy+16, 12, 10);
+  ctx.fillRect(ox-1, oy+17, 16, 10);
+  // Collar detail
+  const darkerShirt = shirt + '99';
+  ctx.fillStyle = darkerShirt;
+  ctx.fillRect(ox+5, oy+16, 4, 1);
+
+  // Face
+  ctx.fillStyle = skin;
+  ctx.fillRect(ox+1, oy+3, 12, 11);
+  ctx.fillRect(ox, oy+4, 14, 9);
+
+  // Eyes
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(ox+3, oy+7, 3, 3);
+  ctx.fillRect(ox+8, oy+7, 3, 3);
+  ctx.fillStyle = eyes;
+  ctx.fillRect(ox+4, oy+8, 2, 2);
+  ctx.fillRect(ox+9, oy+8, 2, 2);
+  // Pupils
+  ctx.fillStyle = '#111';
+  ctx.fillRect(ox+5, oy+8, 1, 1);
+  ctx.fillRect(ox+10, oy+8, 1, 1);
+
+  // Mouth
+  ctx.fillStyle = '#c0392b';
+  ctx.fillRect(ox+5, oy+11, 4, 1);
+  // Smile curve
+  ctx.fillRect(ox+4, oy+11, 1, 1);
+  ctx.fillRect(ox+9, oy+11, 1, 1);
+
+  // Blush
+  if (hasBlush) {
+    ctx.fillStyle = 'rgba(255,150,150,0.45)';
+    ctx.fillRect(ox+1, oy+10, 3, 2);
+    ctx.fillRect(ox+10, oy+10, 3, 2);
+  }
+
+  // Hair
+  hairStyle.draw(ctx, ox, oy, hair);
+
+  // Accessory
+  if (accessory) {
+    accessory.draw(ctx, ox, oy, hair);
+  }
+
+  return c.toDataURL();
+}
+
+// Generate 20 avatars
+for (let i = 0; i < 20; i++) {
+  avatarDataUrls.push(generateAvatar(i + 42));
+}
+
+let selectedAvatarId = 0;
+
+// Build avatar grid
+const grid = document.getElementById('avatarGrid');
+avatarDataUrls.forEach((url, i) => {
+  const div = document.createElement('div');
+  div.className = 'avatar-option' + (i === 0 ? ' selected' : '');
+  const img = document.createElement('img');
+  img.src = url;
+  img.width = 56;
+  img.height = 56;
+  img.style.imageRendering = 'pixelated';
+  div.appendChild(img);
+  div.onclick = () => selectAvatar(i);
+  grid.appendChild(div);
+});
+
+// Show preview of first avatar
+updatePreview(0);
+
+function selectAvatar(id) {
+  selectedAvatarId = id;
+  document.querySelectorAll('.avatar-option').forEach((el, i) => {
+    el.classList.toggle('selected', i === id);
+  });
+  updatePreview(id);
+}
+
+function updatePreview(id) {
+  const preview = document.getElementById('avatarPreview');
+  const pctx = preview.getContext('2d');
+  const img = new Image();
+  img.onload = () => {
+    pctx.clearRect(0, 0, 32, 32);
+    pctx.drawImage(img, 0, 0);
+  };
+  img.src = avatarDataUrls[id];
+}
+
+// ========================================
+// MODAL FLOW
+// ========================================
+function goToAvatarSelect() {
+  const input = document.getElementById('nameInput');
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+  document.getElementById('nameModal').classList.add('hidden');
+  document.getElementById('avatarModal').classList.remove('hidden');
+}
+
+document.getElementById('nameInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') goToAvatarSelect();
+});
+
+setTimeout(() => document.getElementById('nameInput').focus(), 300);
+
+// ========================================
+// SOCKET.IO
+// ========================================
+const socket = io({ transports: ['polling', 'websocket'], upgrade: true });
 
 socket.on('connect', () => console.log('Connected to server'));
 
-// Viewer roster
-socket.on('viewerList', (serverNames) => {
-  names = serverNames;
+// Viewer roster - now with avatars
+socket.on('viewerList', (viewers) => {
+  names = viewers.map(v => v.name);
   const ul = document.getElementById('viewerList');
   ul.innerHTML = '';
-  serverNames.forEach(name => {
+  viewers.forEach(v => {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="dot"></span>${name}`;
+    const img = document.createElement('img');
+    img.src = avatarDataUrls[v.avatarId] || avatarDataUrls[0];
+    img.width = 24;
+    img.height = 24;
+    li.appendChild(img);
+    li.appendChild(document.createTextNode(v.name));
     ul.appendChild(li);
   });
-  // Redraw wheel with current players (only if not mid-spin)
   if (!spinning) drawWheel(currentAngle);
 });
 
-// Join toast animation
 socket.on('playerJoined', (name) => {
   const toast = document.createElement('div');
   toast.className = 'join-toast';
@@ -531,33 +763,25 @@ socket.on('playerJoined', (name) => {
   setTimeout(() => toast.remove(), 1500);
 });
 
-// When server says SPIN, everyone spins with the same parameters and names
 socket.on('spin', (data) => {
   doSpin(data.extraRotations, data.randomSegment, data.duration, data.names);
 });
 
-// Name entry
 function joinRoom() {
-  const input = document.getElementById('nameInput');
-  const name = input.value.trim();
-  if (!name) { input.focus(); return; }
-  socket.emit('joinWithName', name);
-  document.getElementById('nameModal').classList.add('hidden');
+  const name = document.getElementById('nameInput').value.trim();
+  if (!name) return;
+  socket.emit('joinWithName', { name, avatarId: selectedAvatarId });
+  document.getElementById('avatarModal').classList.add('hidden');
 }
-
-document.getElementById('nameInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') joinRoom();
-});
-
-// Auto-focus the name input
-setTimeout(() => document.getElementById('nameInput').focus(), 300);
 
 function requestSpin() {
   if (spinning) return;
   socket.emit('requestSpin');
 }
 
-// ---- CONFIG ----
+// ========================================
+// CONFIG
+// ========================================
 let names = [];
 const allColors = [
   ['#ff9a9e', '#fad0c4'],
@@ -573,7 +797,9 @@ const allColors = [
 ];
 const allEmojis = ['\u273F', '\u2740', '\u273E', '\u2741', '\u273D', '\u2606', '\u2665', '\u2736', '\u2764', '\u2734'];
 
-// ---- BACKGROUND ELEMENTS ----
+// ========================================
+// BACKGROUND
+// ========================================
 const starsEl = document.getElementById('stars');
 for (let i = 0; i < 80; i++) {
   const star = document.createElement('div');
@@ -620,47 +846,47 @@ for (let i = 0; i < 15; i++) {
   firefliesEl.appendChild(ff);
 }
 
-// ---- WHEEL ----
-const canvas = document.getElementById('wheel');
-const ctx = canvas.getContext('2d');
+// ========================================
+// WHEEL
+// ========================================
+const wheelCanvas = document.getElementById('wheel');
+const wctx = wheelCanvas.getContext('2d');
 let currentAngle = 0;
 let spinning = false;
 
 function drawWheel(angle, drawNames) {
   const wheelNames = drawNames || names;
   const segments = wheelNames.length;
-  ctx.clearRect(0, 0, 400, 400);
+  wctx.clearRect(0, 0, 400, 400);
 
   if (segments === 0) {
-    // Empty state - waiting for players
-    ctx.save();
-    ctx.translate(200, 200);
-    const emptyGrad = ctx.createRadialGradient(0, 0, 30, 0, 0, 190);
+    wctx.save();
+    wctx.translate(200, 200);
+    const emptyGrad = wctx.createRadialGradient(0, 0, 30, 0, 0, 190);
     emptyGrad.addColorStop(0, '#3a2060');
     emptyGrad.addColorStop(1, '#2a1545');
-    ctx.beginPath();
-    ctx.arc(0, 0, 190, 0, 2 * Math.PI);
-    ctx.fillStyle = emptyGrad;
-    ctx.fill();
-    ctx.strokeStyle = '#ffd700';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = '#ffb6c1';
-    ctx.font = '12px "Press Start 2P"';
-    ctx.textAlign = 'center';
-    ctx.fillText('Waiting for', 0, -10);
-    ctx.fillText('players...', 0, 15);
-    ctx.restore();
+    wctx.beginPath();
+    wctx.arc(0, 0, 190, 0, 2 * Math.PI);
+    wctx.fillStyle = emptyGrad;
+    wctx.fill();
+    wctx.strokeStyle = '#ffd700';
+    wctx.lineWidth = 2;
+    wctx.stroke();
+    wctx.fillStyle = '#ffb6c1';
+    wctx.font = '12px "Press Start 2P"';
+    wctx.textAlign = 'center';
+    wctx.fillText('Waiting for', 0, -10);
+    wctx.fillText('players...', 0, 15);
+    wctx.restore();
     return;
   }
 
   const segAngle = (2 * Math.PI) / segments;
 
-  ctx.save();
-  ctx.translate(200, 200);
-  ctx.rotate(angle);
+  wctx.save();
+  wctx.translate(200, 200);
+  wctx.rotate(angle);
 
-  // Scale font size based on number of segments and longest name
   const maxLen = Math.max(...wheelNames.map(n => n.length));
   let fontSize = 15;
   if (segments > 8 || maxLen > 10) fontSize = 12;
@@ -671,55 +897,57 @@ function drawWheel(angle, drawNames) {
     const endAngle = startAngle + segAngle;
     const colors = allColors[i % allColors.length];
 
-    const grad = ctx.createRadialGradient(0, 0, 30, 0, 0, 190);
+    const grad = wctx.createRadialGradient(0, 0, 30, 0, 0, 190);
     grad.addColorStop(0, colors[1]);
     grad.addColorStop(1, colors[0]);
 
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(0, 0, 190, startAngle, endAngle);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
+    wctx.beginPath();
+    wctx.moveTo(0, 0);
+    wctx.arc(0, 0, 190, startAngle, endAngle);
+    wctx.closePath();
+    wctx.fillStyle = grad;
+    wctx.fill();
 
-    ctx.strokeStyle = '#ffd700';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    wctx.strokeStyle = '#ffd700';
+    wctx.lineWidth = 2;
+    wctx.stroke();
 
-    ctx.save();
-    ctx.rotate(startAngle + segAngle / 2);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#2c1810';
-    ctx.font = `600 ${fontSize}px "Press Start 2P"`;
-    ctx.fillText(wheelNames[i], 110, 5);
+    wctx.save();
+    wctx.rotate(startAngle + segAngle / 2);
+    wctx.textAlign = 'center';
+    wctx.fillStyle = '#2c1810';
+    wctx.font = `600 ${fontSize}px "Press Start 2P"`;
+    wctx.fillText(wheelNames[i], 110, 5);
 
-    ctx.font = '18px serif';
-    ctx.fillText(allEmojis[i % allEmojis.length], 170, 5);
-    ctx.restore();
+    wctx.font = '18px serif';
+    wctx.fillText(allEmojis[i % allEmojis.length], 170, 5);
+    wctx.restore();
   }
 
-  const centerGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, 28);
+  const centerGrad = wctx.createRadialGradient(0, 0, 5, 0, 0, 28);
   centerGrad.addColorStop(0, '#fff');
   centerGrad.addColorStop(1, '#ffd700');
-  ctx.beginPath();
-  ctx.arc(0, 0, 28, 0, 2 * Math.PI);
-  ctx.fillStyle = centerGrad;
-  ctx.fill();
-  ctx.strokeStyle = '#8b4513';
-  ctx.lineWidth = 3;
-  ctx.stroke();
+  wctx.beginPath();
+  wctx.arc(0, 0, 28, 0, 2 * Math.PI);
+  wctx.fillStyle = centerGrad;
+  wctx.fill();
+  wctx.strokeStyle = '#8b4513';
+  wctx.lineWidth = 3;
+  wctx.stroke();
 
-  ctx.font = '20px serif';
-  ctx.fillStyle = '#ff69b4';
-  ctx.textAlign = 'center';
-  ctx.fillText('\u2605', 0, 7);
+  wctx.font = '20px serif';
+  wctx.fillStyle = '#ff69b4';
+  wctx.textAlign = 'center';
+  wctx.fillText('\u2605', 0, 7);
 
-  ctx.restore();
+  wctx.restore();
 }
 
 drawWheel(0);
 
-// ---- AUDIO ----
+// ========================================
+// AUDIO
+// ========================================
 let audioCtx = null;
 let musicPlaying = false;
 let musicInterval = null;
@@ -795,12 +1023,10 @@ function toggleMusic() {
 
 function playSpinTick(progress) {
   const ac = getAudioCtx();
-  // Pitch drops and volume rises as it slows - builds tension!
   const pitch = 400 + (1 - progress) * 600;
   const vol = 0.04 + progress * 0.08;
   const len = 0.03 + progress * 0.12;
   playNote(pitch, ac.currentTime, len, 'square', vol);
-  // Add a lower undertone as it gets close to stopping
   if (progress > 0.7) {
     playNote(pitch * 0.5, ac.currentTime, len * 1.5, 'triangle', vol * 0.5);
   }
@@ -817,16 +1043,17 @@ function playWinSound() {
   playNote(2093, t + 0.6, 0.4, 'sine', 0.04);
 }
 
-// ---- SYNCED SPIN ----
+// ========================================
+// SYNCED SPIN
+// ========================================
 function doSpin(extraRotations, randomSegment, duration, spinNames) {
   if (spinning) return;
   if (!spinNames || spinNames.length === 0) return;
   spinning = true;
   document.getElementById('spinBtn').disabled = true;
 
-  getAudioCtx(); // ensure audio context
+  getAudioCtx();
 
-  // Use the server-locked names for this spin
   const segments = spinNames.length;
   const segAngle = (2 * Math.PI) / segments;
 
@@ -840,7 +1067,6 @@ function doSpin(extraRotations, randomSegment, duration, spinNames) {
     const elapsed = now - startTime;
     const progress = Math.min(elapsed / duration, 1);
 
-    // Game-show easing: fast start, long dramatic slowdown at the end
     let eased;
     if (progress < 0.3) {
       eased = 0.7 * (progress / 0.3);
@@ -864,7 +1090,6 @@ function doSpin(extraRotations, randomSegment, duration, spinNames) {
       const normalizedAngle = (2 * Math.PI - currentAngle % (2 * Math.PI)) % (2 * Math.PI);
       const winnerIndex = Math.floor(normalizedAngle / segAngle) % segments;
 
-      // Dramatic pause before reveal
       setTimeout(() => {
         showWinner(spinNames[winnerIndex]);
         spinning = false;
@@ -876,7 +1101,9 @@ function doSpin(extraRotations, randomSegment, duration, spinNames) {
   requestAnimationFrame(animate);
 }
 
-// ---- WINNER DISPLAY ----
+// ========================================
+// WINNER DISPLAY
+// ========================================
 function showWinner(name) {
   playWinSound();
   const overlay = document.getElementById('winnerOverlay');
@@ -904,7 +1131,7 @@ function closeOverlay() {
   document.getElementById('winnerOverlay').classList.remove('show');
 }
 
-canvas.addEventListener('click', requestSpin);
+wheelCanvas.addEventListener('click', requestSpin);
 </script>
 </body>
 </html>

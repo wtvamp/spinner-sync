@@ -6,28 +6,30 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  transports: ['websocket'],
+  transports: ['polling', 'websocket'],
+  allowUpgrades: true,
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 let spinning = false;
-const viewers = new Map(); // socket.id -> name
+const viewers = new Map(); // socket.id -> { name, avatarId }
 
 function broadcastViewers() {
-  const names = Array.from(viewers.values());
-  io.emit('viewerList', names);
+  const list = Array.from(viewers.values());
+  io.emit('viewerList', list);
 }
 
 io.on('connection', (socket) => {
   console.log('A viewer connected! Total:', io.engine.clientsCount);
 
-  socket.on('joinWithName', (name) => {
-    const clean = String(name).trim().slice(0, 20);
-    if (!clean) return;
-    viewers.set(socket.id, clean);
-    console.log(`${clean} joined!`);
-    io.emit('playerJoined', clean);
+  socket.on('joinWithName', (data) => {
+    const name = String(data.name || data).trim().slice(0, 20);
+    const avatarId = typeof data.avatarId === 'number' ? data.avatarId : 0;
+    if (!name) return;
+    viewers.set(socket.id, { name, avatarId });
+    console.log(`${name} joined with avatar ${avatarId}!`);
+    io.emit('playerJoined', name);
     broadcastViewers();
   });
 
@@ -35,25 +37,22 @@ io.on('connection', (socket) => {
     if (spinning) return;
     spinning = true;
 
-    // Generate spin parameters server-side so everyone gets the same result
     const extraRotations = (Math.floor(Math.random() * 4) + 8) * 2 * Math.PI;
     const randomSegment = Math.random() * 2 * Math.PI;
     const duration = 8000 + Math.random() * 2000;
 
-    // Lock the names at spin time so everyone uses the same list
-    const spinNames = Array.from(viewers.values());
+    const spinNames = Array.from(viewers.values()).map(v => v.name);
     if (spinNames.length === 0) { spinning = false; return; }
 
-    // Broadcast to ALL clients (including sender)
     io.emit('spin', { extraRotations, randomSegment, duration, names: spinNames });
 
     setTimeout(() => { spinning = false; }, duration + 4000);
   });
 
   socket.on('disconnect', () => {
-    const name = viewers.get(socket.id);
+    const viewer = viewers.get(socket.id);
     viewers.delete(socket.id);
-    if (name) console.log(`${name} left.`);
+    if (viewer) console.log(`${viewer.name} left.`);
     broadcastViewers();
   });
 });
