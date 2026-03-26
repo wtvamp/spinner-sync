@@ -288,17 +288,29 @@ async function generateAvatar() {
   // Pre-load hair layers
   const hairName = pick(HAIRS);
   const isMascHair = HAIRS_MASC.includes(hairName);
-  const bangName = isMascHair ? null : pick(BANGS_FEM); // no bangs for masc - they add too much length
+  const bangName = isMascHair ? pick(BANGS_MASC) : pick(BANGS_FEM);
 
-  // === COMPOSITING ORDER ===
+  // === COMPOSITING ORDER (from Jazzybee creator source) ===
+  // Back hair → face shape → features → clothing → top hair/bangs
 
-  // 1. Face shape (recolored skin) - goes first as base
-  if (faceImg) {
-    const fd = recolorData(getPixels(faceImg), false);
-    stamp(fd);
+  // 1. BACK HAIR (bhair) - goes BEHIND face, covers crown
+  //    recolorData(true) makes skin pixels hair-colored
+  const bhairImg = await loadImage(hairName);
+  if (bhairImg) stamp(recolorData(getPixels(bhairImg), true));
+
+  // Hair extension (also behind face)
+  const he = pick(HAIR_EXT);
+  if (he) {
+    const heImg = await loadImage(he);
+    if (heImg) stamp(recolorData(getPixels(heImg), true));
   }
 
-  // 3. Facial features - stamp only detail pixels
+  // 2. FACE SHAPE - goes ON TOP, clips back hair with solid alpha=255 skin
+  if (faceImg) {
+    stamp(recolorData(getPixels(faceImg), false));
+  }
+
+  // 3. Facial features (detail stamps on top of face)
   const noseName = pick(NOSES);
   const features = [
     [pick(EYES), false], [pick(BROWS), true], [noseName, false], [pick(MOUTHS), false]
@@ -312,164 +324,65 @@ async function generateAvatar() {
     const img = await loadImage(name);
     if (img) stampDetails(getPixels(img), isH);
   }
-  // Nose is pure skin shading - stamp shade differences
   const noseImg = await loadImage(noseName);
   if (noseImg) stampShadeDiffs(getPixels(noseImg));
 
-  // 3b. Facial hair - only with masculine hairstyles, recolor to match hair
-  const beardName = isMascHair ? pick(FACIAL_HAIR) : null;
-  if (beardName) {
-    const img = await loadImage(beardName);
-    if (img) {
-      // Recolor beard with hair color then stamp only non-skin pixels
-      const bd = recolorHairZoned(getPixels(img));
-      stampNonSkin(bd);
-    }
-  }
-
-  // 4. Clothing (drawn before hair, will re-stamp after)
+  // 4. Clothing (raw draw)
   const topName = isMascHair ? pick(TOPS_NEUTRAL) : pick([...TOPS_FEM, ...TOPS_NEUTRAL]);
   const slName = pick(SLEEVES);
   const ovName = pick(OVERS);
   const topImg = await loadImage(topName);
-  if (topImg) { ctx.drawImage(topImg, 0, 0, 64, 64); }
+  if (topImg) ctx.drawImage(topImg, 0, 0, 64, 64);
   const slImg = await loadImage(slName);
-  if (slImg) { ctx.drawImage(slImg, 0, 0, 64, 64); }
+  if (slImg) ctx.drawImage(slImg, 0, 0, 64, 64);
   if (ovName) { const img = await loadImage(ovName); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
 
-  // 5. Hair - paint a hair-color fill ONLY where hair/bang layers have pixels
-  // This follows the natural hair shape instead of a hard rectangle
-  {
-    const hairMid = hair[Math.floor(hair.length / 2)];
-    const hairDark = hair[Math.max(0, Math.floor(hair.length / 2) - 1)];
-    const hairFill = new ImageData(64, 64);
-    // Get hair and bang pixel coverage
-    const hImg = await loadImage(hairName);
-    const bImg = await loadImage(bangName);
-    const hPixels = hImg ? getPixels(hImg) : null;
-    const bPixels = bImg ? getPixels(bImg) : null;
-    for (let y = 0; y < 64; y++) {
-      for (let x = 0; x < 64; x++) {
-        const i = (y * 64 + x) * 4;
-        const hairHere = (hPixels && hPixels.data[i+3] > 0) || (bPixels && bPixels.data[i+3] > 0);
-        if (hairHere) {
-          // Use darker shade at edges, mid-tone in center for depth
-          const c = (y < 10) ? hairDark : hairMid;
-          hairFill.data[i] = c[0];
-          hairFill.data[i+1] = c[1];
-          hairFill.data[i+2] = c[2];
-          hairFill.data[i+3] = 255;
-        }
-      }
-    }
-    stamp(hairFill);
-  }
-  // Smart hair recolor: skin pixels become hair-colored ONLY where
-  // surrounded by actual hair-colored pixels (scalp between strands).
-  // Isolated skin pixels (exposed face) stay as skin.
-  function recolorHairZoned(imgData) {
-    const d = imgData.data;
-    // First pass: find where actual hair-colored pixels are
-    const isHairPx = new Uint8Array(64 * 64);
-    for (let y = 0; y < 64; y++)
-      for (let x = 0; x < 64; x++) {
-        const i = (y * 64 + x) * 4;
-        if (d[i+3] === 0) continue;
-        const hk = colKey(d[i], d[i+1], d[i+2]);
-        if (HAIR_SET.has(hk) || (d[i]===OUTLINE[0] && d[i+1]===OUTLINE[1] && d[i+2]===OUTLINE[2])) {
-          isHairPx[y * 64 + x] = 1;
-        }
-      }
-    // Build a "hair density" map - how many hair pixels within 3px radius
-    const hairDensity = new Uint8Array(64 * 64);
-    for (let y = 0; y < 64; y++)
-      for (let x = 0; x < 64; x++) {
-        let count = 0;
-        for (let dy = -3; dy <= 3; dy++)
-          for (let dx = -3; dx <= 3; dx++) {
-            const ny = y + dy, nx = x + dx;
-            if (ny >= 0 && ny < 64 && nx >= 0 && nx < 64)
-              count += isHairPx[ny * 64 + nx];
-          }
-        hairDensity[y * 64 + x] = count;
-      }
-    // Second pass: recolor
-    for (let y = 0; y < 64; y++) {
-      for (let x = 0; x < 64; x++) {
-        const i = (y * 64 + x) * 4;
-        if (d[i+3] === 0) continue;
-        const r = d[i], g = d[i+1], b = d[i+2];
-        const hk = colKey(r, g, b);
-        if (HAIR_SET.has(hk)) {
-          const idx = HAIR_BASE.findIndex(c => c[0]===r && c[1]===g && c[2]===b);
-          const nc = hair[Math.min(idx, hair.length-1)];
-          d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
-        } else if (r===OUTLINE[0] && g===OUTLINE[1] && b===OUTLINE[2]) {
-          d[i] = hair[0][0]; d[i+1] = hair[0][1]; d[i+2] = hair[0][2];
-        } else {
-          // Skin pixel: if surrounded by lots of hair, make it hair (scalp)
-          // If sparse hair nearby, keep as skin (exposed face)
-          const density = hairDensity[y * 64 + x];
-          const makeHair = density >= 10; // need 10+ hair pixels in 7x7 area
-          const nc = recolorPixel(r, g, b, skin, hair, eye, lip, makeHair);
-          d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
-        }
-      }
-    }
-    return imgData;
-  }
-  const hairImg2 = await loadImage(hairName);
-  if (hairImg2) { stamp(recolorHairZoned(getPixels(hairImg2))); }
-  const bangImg2 = await loadImage(bangName);
-  if (bangImg2) { stamp(recolorHairZoned(getPixels(bangImg2))); }
-
-  // Hair extension
-  const he = pick(HAIR_EXT);
-  if (he) {
-    const img = await loadImage(he);
-    if (img) { stamp(recolorHairZoned(getPixels(img))); }
-  }
-
-  // 6. Hat (gender-matched, zoned recolor)
-  const hat = isMascHair ? pick(HATS_MASC) : pick(HATS_FEM);
-  if (hat) {
-    const img = await loadImage(hat);
-    if (img) { stamp(recolorHairZoned(getPixels(img))); }
-  }
-
-  // 7. Glasses - stamp only non-skin pixels (frames, lenses) to avoid wiping hair
+  // 5. Glasses (non-skin stamp)
   const gl = pick(GLASSES);
   if (gl) {
     const img = await loadImage(gl);
     if (img) stampNonSkin(getPixels(img));
   }
 
-  // 8. Ear/neck accessories - stamp only non-skin pixels
+  // 6. Beard (non-skin stamp, masc only, recolored)
+  const beardName = isMascHair ? pick(FACIAL_HAIR) : null;
+  if (beardName) {
+    const img = await loadImage(beardName);
+    if (img) {
+      const bd = recolorData(getPixels(img), true);
+      stampNonSkin(bd);
+    }
+  }
+
+  // 7. Ear/neck accessories (non-skin stamp)
   const ea = pick(EAR_ACC);
   if (ea) { const img = await loadImage(ea); if (img) stampNonSkin(getPixels(img)); }
   const na = pick(NECK_ACC);
   if (na) { const img = await loadImage(na); if (img) stampNonSkin(getPixels(img)); }
 
-  // 9. Re-stamp clothing non-skin pixels (shirts/sleeves got covered by hair)
-  if (topImg) stampNonSkin(getPixels(topImg));
-  if (slImg) stampNonSkin(getPixels(slImg));
-  if (ovName) { const img = await loadImage(ovName); if (img) stampNonSkin(getPixels(img)); }
-
-  // 10. Re-stamp beard FIRST (so eyes go on top of it)
-  if (beardName) {
-    const img = await loadImage(beardName);
-    if (img) {
-      const bd = recolorHairZoned(getPixels(img));
-      stampNonSkin(bd);
-    }
+  // 8. TOP HAIR / BANGS - goes on top of EVERYTHING (this is the "thair" layer)
+  if (bangName) {
+    const thairImg = await loadImage(bangName);
+    if (thairImg) stamp(recolorData(getPixels(thairImg), true));
   }
-  // 11. RE-STAMP all facial details on top (eyes/brows/mouth ALWAYS visible)
+
+  // 9. Hat - very top
+  const hat = isMascHair ? pick(HATS_MASC) : pick(HATS_FEM);
+  if (hat) {
+    const img = await loadImage(hat);
+    if (img) stamp(recolorData(getPixels(img), true));
+  }
+
+  // 10. RE-STAMP facial details (eyes/brows/mouth always visible through hair/hat)
   for (const [name, isH] of features) {
     const img = await loadImage(name);
     if (img) stampDetails(getPixels(img), isH);
   }
-  // Re-stamp nose shade diffs
   if (noseImg) stampShadeDiffs(getPixels(noseImg));
+  // Re-stamp clothing non-skin (visible through hair)
+  if (topImg) stampNonSkin(getPixels(topImg));
+  if (slImg) stampNonSkin(getPixels(slImg));
+  if (ovName) { const img = await loadImage(ovName); if (img) stampNonSkin(getPixels(img)); }
 
   // Upscale to 256x256
   const output = document.createElement('canvas');
