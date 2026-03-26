@@ -343,25 +343,52 @@ async function generateAvatar() {
     }
     stamp(hairFill);
   }
-  // Layer the actual hair strands - use full recolor (skin->hair) so the
-  // entire hair layer shows as hair-colored. This gives full coverage.
+  // Layer hair strands with zone-based recolor:
+  // Above eye line (y<22): skin pixels -> hair (full crown coverage)
+  // Below eye line (y>=22): skin pixels -> skin (no cheek tinting)
+  // Hair-colored pixels always -> target hair everywhere
+  function recolorHairZoned(imgData) {
+    const d = imgData.data;
+    for (let y = 0; y < 64; y++) {
+      for (let x = 0; x < 64; x++) {
+        const i = (y * 64 + x) * 4;
+        if (d[i+3] === 0) continue;
+        const r = d[i], g = d[i+1], b = d[i+2];
+        const hk = colKey(r, g, b);
+        // Hair-base colors always become target hair
+        if (HAIR_SET.has(hk)) {
+          const idx = HAIR_BASE.findIndex(c => c[0]===r && c[1]===g && c[2]===b);
+          const nc = hair[Math.min(idx, hair.length-1)];
+          d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
+        } else if (r===OUTLINE[0] && g===OUTLINE[1] && b===OUTLINE[2]) {
+          d[i] = hair[0][0]; d[i+1] = hair[0][1]; d[i+2] = hair[0][2];
+        } else {
+          // Skin pixels: above eye line -> hair, below -> skin
+          const isAboveEyes = y < 22;
+          const nc = recolorPixel(r, g, b, skin, hair, eye, lip, isAboveEyes);
+          d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
+        }
+      }
+    }
+    return imgData;
+  }
   const hairImg2 = await loadImage(hairName);
-  if (hairImg2) { stamp(recolorData(getPixels(hairImg2), true)); }
+  if (hairImg2) { stamp(recolorHairZoned(getPixels(hairImg2))); }
   const bangImg2 = await loadImage(bangName);
-  if (bangImg2) { stamp(recolorData(getPixels(bangImg2), true)); }
+  if (bangImg2) { stamp(recolorHairZoned(getPixels(bangImg2))); }
 
   // Hair extension
   const he = pick(HAIR_EXT);
   if (he) {
     const img = await loadImage(he);
-    if (img) { stamp(recolorData(getPixels(img), true)); }
+    if (img) { stamp(recolorHairZoned(getPixels(img))); }
   }
 
-  // 6. Hat (full recolor - hair colors become target hair)
+  // 6. Hat (zoned recolor)
   const hat = pick(HATS);
   if (hat) {
     const img = await loadImage(hat);
-    if (img) { stamp(recolorData(getPixels(img), true)); }
+    if (img) { stamp(recolorHairZoned(getPixels(img))); }
   }
 
   // 7. Glasses - stamp only non-skin pixels (frames, lenses) to avoid wiping hair
@@ -377,34 +404,7 @@ async function generateAvatar() {
   const na = pick(NECK_ACC);
   if (na) { const img = await loadImage(na); if (img) stampNonSkin(getPixels(img)); }
 
-  // 9. Re-stamp face skin in the lower face area to fix hair color bleed on cheeks/neck
-  // Only repaint skin where it's NOT covered by hair (below y=18 where hair doesn't reach)
-  if (faceImg) {
-    const faceData = recolorData(getPixels(faceImg), false);
-    const skinFix = new ImageData(64, 64);
-    const fd = faceData.data;
-    const canvasData = ctx.getImageData(0,0,64,64).data;
-    for (let y = 18; y < 64; y++) {
-      for (let x = 0; x < 64; x++) {
-        const i = (y*64+x)*4;
-        if (fd[i+3] === 0) continue;
-        // Check if current canvas pixel looks like hair (not skin)
-        const cr = canvasData[i], cg = canvasData[i+1], cb = canvasData[i+2];
-        let isSkin = false;
-        for (const s of skin) {
-          if (Math.abs(cr-s[0]) < 5 && Math.abs(cg-s[1]) < 5 && Math.abs(cb-s[2]) < 5) {
-            isSkin = true; break;
-          }
-        }
-        // If it's NOT skin (i.e. it's hair-tinted), repaint with correct skin
-        if (!isSkin) {
-          skinFix.data[i] = fd[i]; skinFix.data[i+1] = fd[i+1];
-          skinFix.data[i+2] = fd[i+2]; skinFix.data[i+3] = 255;
-        }
-      }
-    }
-    stamp(skinFix);
-  }
+  // 9. No hard skin-fix needed - handled by smart hair recolor below
 
   // 10. RE-STAMP all facial details on top (so they show through hair/clothes)
   for (const [name, isH] of features) {
