@@ -161,7 +161,7 @@ async function generateAvatar() {
   ctx.fillStyle = `rgb(${bg[0]},${bg[1]},${bg[2]})`;
   ctx.fillRect(0, 0, 64, 64);
 
-  // Load face shape to create mask
+  // Load face shape to create mask (expanded to include neck/chest area)
   const faceName = pick(FACES);
   const faceImg = await loadImage(faceName);
   let faceMask = new Set();
@@ -172,6 +172,11 @@ async function generateAvatar() {
         const i = (y * 64 + x) * 4;
         if (fd.data[i+3] > 0) faceMask.add(x + ',' + y);
       }
+    // Expand mask to cover neck/chest so hair doesn't show through there
+    // Neck area: roughly center columns, below face
+    for (let y = 0; y < 64; y++)
+      for (let x = 16; x < 48; x++)
+        if (y >= 32) faceMask.add(x + ',' + y);  // everything below mid-face in center
   }
 
   // Helper: recolor an image's pixel data
