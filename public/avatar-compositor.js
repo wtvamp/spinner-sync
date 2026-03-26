@@ -16,8 +16,16 @@ const LIP_OLD = [[142,4,41],[189,57,71],[245,102,96]];
 const HAIR_BASE = [[45,33,84],[56,69,141],[51,88,181],[33,118,220],[0,166,238],[49,210,255],[95,247,255]];
 
 // All "detail" colors that should always be visible (not skin fill)
+// Includes: outlines, iris, lips, whites, highlights, eyelash colors, eye shadows
 const DETAIL_SET = new Set([
-  ...[ OUTLINE, ...IRIS_OLD, ...LIP_OLD, [252,254,255], [255,157,2] ].map(c => c.join(','))
+  ...[ OUTLINE, ...IRIS_OLD, ...LIP_OLD,
+    [252,254,255], [255,157,2],
+    // Extra eye colors found in various eye layers
+    [129,131,211], [250,246,255], [213,240,255], // eye highlights/shadows
+    [81,194,133], [99,0,54], // eyelash variants
+    [181,164,203], [81,65,111], [154,139,189], [45,0,33], // elegant/disdain lash
+    [249,131,116], // heavy mouth highlight
+  ].map(c => c.join(','))
 ]);
 const HAIR_SET = new Set(HAIR_BASE.map(c => c.join(',')));
 
@@ -61,10 +69,10 @@ const BG_COLORS = [[200,175,140],[190,170,150],[185,168,148],[198,182,158],[192,
 
 // Layer options (filenames in /sprites/)
 const FACES = ['oval.png','round.png','sharpheart.png','bluntheart.png','diamond.png','sharptriangle.png','rect.png','pointoval.png','longpoint.png','blunttriablge.png'];
-const EYES = ['almond.png','neutral.png','elegant.png','droopy.png','startled.png','small.png','small2.png','roundlookaway.png','droopyhood.png','disdain.png'];
+const EYES = ['almond.png','neutral.png','elegant.png','droopy.png','startled.png','small2.png','roundlookaway.png','droopyhood.png','disdain.png']; // removed small.png (zero detail)
 const BROWS = ['shortstraight.png','thinstraight.png','thickstraight.png','shortthin.png','thickdownturned.png','thinangry.png','shortangry.png','thickangry.png'];
 const NOSES = ['button.png','dainty.png','upturned.png','slightdefined.png','defined.png','greek.png','roman.png','buttonbridge.png','definedbridge.png'];
-const MOUTHS = ['smilelight.png','smileheavy.png','smileno.png','smirkno.png','neutrallight.png','neutralheavy.png','neutralno.png','poutyno.png','sillypout.png','uncertainlight.png','twosmileno.png'];
+const MOUTHS = ['smilelight.png','smileheavy.png','neutrallight.png','neutralheavy.png','uncertainlight.png']; // removed *no.png variants (zero detail - pure skin shading)
 const HAIRS = ['wavylong.png','longstraight.png','longstraightvol.png','wavybob.png','straightbob.png','braids.png','pigtails.png','bun.png','lowbun.png','widebun.png','curlybob.png','curlyhalfup.png','curlybun.png','curlyspacebuns.png','spacebuns.png','spacebunstwin.png','longpony.png','midlengthpony.png','sideswept.png','faceframe.png','longmidpart.png','curtainbangs.png','pixie.png','afro1.png','afro2.png','shortmessy.png','shortneat.png','midchoppy.png','pulledback.png','longdread.png','shortdreads.png','wisps.png'];
 const BANGS = ['straight1.png','straight2.png','side1.png','side2.png','swoopy.png','sideparttucked.png','curlyside1.png','curlyside2.png','curlymidpart.png','curlysideleft.png','wavymid.png','widowspeak.png','messyspiky.png','shortdangly.png','sidesweptleft.png','curledback.png','slickedbacklong.png','shortdisheveled.png','midshortmess.png','shortslightmess.png'];
 const TOPS = ['crewneck.png','vneck.png','turtleneck.png','frill.png','roundneck.png','shoulderfree.png','tanktop.png','widecut.png','asymmetrical.png','fancy.png','cutetop.png','spagetti.png','ruffletop.png','strapless.png','neckholder.png','widevneck.png','ruffletop2.png','princesstop.png','striped.png','sari.png','widecut2.png','nosleeves.png','collarstand.png','uniform.png','tallcollar.png','shirtsweater.png','sweater.png','shirtbow.png','shirttie.png','tatter.png','jumpsuit.png','robe.png'];
@@ -338,7 +346,36 @@ async function generateAvatar() {
   const na = pick(NECK_ACC);
   if (na) { const img = await loadImage(na); if (img) stampNonSkin(getPixels(img)); }
 
-  // 9. RE-STAMP all facial details on top (so they show through hair/clothes)
+  // 9. Re-stamp face skin in the lower face area to fix hair color bleed on cheeks/neck
+  // Only repaint skin where it's NOT covered by hair (below y=18 where hair doesn't reach)
+  if (faceImg) {
+    const faceData = recolorData(getPixels(faceImg), false);
+    const skinFix = new ImageData(64, 64);
+    const fd = faceData.data;
+    const canvasData = ctx.getImageData(0,0,64,64).data;
+    for (let y = 18; y < 64; y++) {
+      for (let x = 0; x < 64; x++) {
+        const i = (y*64+x)*4;
+        if (fd[i+3] === 0) continue;
+        // Check if current canvas pixel looks like hair (not skin)
+        const cr = canvasData[i], cg = canvasData[i+1], cb = canvasData[i+2];
+        let isSkin = false;
+        for (const s of skin) {
+          if (Math.abs(cr-s[0]) < 5 && Math.abs(cg-s[1]) < 5 && Math.abs(cb-s[2]) < 5) {
+            isSkin = true; break;
+          }
+        }
+        // If it's NOT skin (i.e. it's hair-tinted), repaint with correct skin
+        if (!isSkin) {
+          skinFix.data[i] = fd[i]; skinFix.data[i+1] = fd[i+1];
+          skinFix.data[i+2] = fd[i+2]; skinFix.data[i+3] = 255;
+        }
+      }
+    }
+    stamp(skinFix);
+  }
+
+  // 10. RE-STAMP all facial details on top (so they show through hair/clothes)
   for (const [name, isH] of features) {
     const img = await loadImage(name);
     if (img) stampDetails(getPixels(img), isH);
