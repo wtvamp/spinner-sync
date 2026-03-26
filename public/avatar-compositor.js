@@ -177,7 +177,7 @@ async function generateAvatar() {
   ctx.fillRect(0, 0, 64, 64);
 
   // Pick gender early so spriteDir is available for all loads
-  const isMascHair = Math.random() < 0.35;
+  const isMascHair = Math.random() < 0.25;
   const spriteDir = isMascHair ? '/sprites-masc/' : '/sprites/';
   const hairName = isMascHair ? pick(HAIRS_MASC) : pick(HAIRS_FEM);
   const bangName = isMascHair ? pick(BANGS_MASC) : pick(BANGS_FEM);
