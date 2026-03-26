@@ -76,13 +76,15 @@ const MOUTHS = ['smilelight.png','smileheavy.png','neutrallight.png','neutralhea
 const HAIRS_FEM = ['wavylong.png','longstraight.png','longstraightvol.png','wavybob.png','straightbob.png','braids.png','pigtails.png','bun.png','lowbun.png','widebun.png','curlybob.png','curlyhalfup.png','curlybun.png','curlyspacebuns.png','spacebuns.png','spacebunstwin.png','longpony.png','midlengthpony.png','sideswept.png','faceframe.png','longmidpart.png','curtainbangs.png','pixie.png','longdread.png','wisps.png','dreadsbun.png','pulledback.png','afro1.png','afro2.png','shortdreads.png'];
 const HAIRS_MASC = ['buzz.png','spiky.png','slickedback.png','slickedspiky.png','shortshaved.png','crewshaved.png','curlyshaved.png','tallspikes.png','shortmessy.png','shortneat.png','shortmess.png','midchoppy.png'];
 const HAIRS = [...HAIRS_FEM, ...HAIRS_MASC];
-const BANGS = ['straight1.png','straight2.png','side1.png','side2.png','swoopy.png','sideparttucked.png','curlyside1.png','curlyside2.png','curlymidpart.png','curlysideleft.png','wavymid.png','widowspeak.png','messyspiky.png','shortdangly.png','sidesweptleft.png','curledback.png','slickedbacklong.png','shortdisheveled.png','midshortmess.png','shortslightmess.png','shortneat.png','quailfeather.png'];
+const BANGS_FEM = ['straight1.png','straight2.png','side1.png','side2.png','swoopy.png','sideparttucked.png','curlyside1.png','curlyside2.png','curlymidpart.png','curlysideleft.png','wavymid.png','widowspeak.png','shortdangly.png','sidesweptleft.png','curledback.png','slickedbacklong.png'];
+const BANGS_MASC = ['messyspiky.png','shortdisheveled.png','midshortmess.png','shortslightmess.png','shortneat.png','quailfeather.png','widowspeak.png','slickedbacklong.png'];
 const TOPS_FEM = ['frill.png','roundneck.png','shoulderfree.png','tanktop.png','widecut.png','asymmetrical.png','fancy.png','cutetop.png','spagetti.png','ruffletop.png','strapless.png','neckholder.png','widevneck.png','ruffletop2.png','princesstop.png','sari.png','widecut2.png','nosleeves.png'];
 const TOPS_NEUTRAL = ['crewneck.png','vneck.png','turtleneck.png','striped.png','collarstand.png','uniform.png','tallcollar.png','shirtsweater.png','sweater.png','shirtbow.png','shirttie.png','tatter.png','jumpsuit.png','robe.png'];
 const TOPS = [...TOPS_FEM, ...TOPS_NEUTRAL];
 const SLEEVES = ['regsleeves.png','puffysleeves.png','elegantsleeves.png','fancysleeves.png','lowsleeves.png','squaresleeves.png','maxruffles.png','rippedsleeves.png'];
 const OVERS = [null,null,null,null,null,null,null,null,'cardigan.png','hoodie.png','jacket.png','vest.png','scarf.png','overalls1.png','overalls2.png','suspenders.png','cape.png','neckkerchief.png','openshirt.png','suitjacket.png','winterjacket1.png','winterjacket2.png','uniformjacket.png','ruffles.png','sweatervest.png','apron.png','bowtie.png'];
-const HATS = [null,null,null,null,null,null,null,null,null,null,'bow.png','flower.png','ribbon.png','headband.png','star.png','flower_crown.png','cat_ears.png','rose.png','bigbow.png','narrowheadband.png','wideheadband.png','tiara.png','crown.png','beanie.png','cap.png','newsboy.png','straw.png','sun.png','cowboy.png','bandana.png','witchhat.png','witchhat2.png','top.png','bowler.png','horns.png','watermelonband.png','tropiclip.png','exotic_flower.png'];
+const HATS_FEM = [null,null,null,null,null,null,null,null,'bow.png','flower.png','ribbon.png','headband.png','star.png','flower_crown.png','cat_ears.png','rose.png','bigbow.png','narrowheadband.png','wideheadband.png','tiara.png','crown.png','beanie.png','straw.png','sun.png','witchhat.png','witchhat2.png','horns.png','watermelonband.png','tropiclip.png','exotic_flower.png'];
+const HATS_MASC = [null,null,null,null,null,null,null,null,'beanie.png','cap.png','newsboy.png','cowboy.png','bandana.png','top.png','bowler.png'];
 const EAR_ACC = [null,null,null,null,null,null,'danglyear.png','hoopear.png','studear.png','silvereardangle.png','silverearstud.png','goldeardangle.png','goldearstud.png','flowerear.png','bobblear.png','thickdanglyear.png','earring8.png'];
 const NECK_ACC = [null,null,null,null,null,null,null,null,'chainnecklace.png','beadnecklace.png','beadnecklace2.png','choker.png','silverchoker.png','goldchoker.png','doublechain.png'];
 const GLASSES = [null,null,null,null,null,null,null,null,null,null,'glassesbottom.png','glassesround.png','glassesroundedrect.png','glassestop.png','glassesrectangle.png'];
@@ -285,8 +287,8 @@ async function generateAvatar() {
 
   // Pre-load hair layers
   const hairName = pick(HAIRS);
-  const bangName = pick(BANGS);
   const isMascHair = HAIRS_MASC.includes(hairName);
+  const bangName = isMascHair ? pick(BANGS_MASC) : pick(BANGS_FEM);
 
   // === COMPOSITING ORDER ===
 
@@ -428,8 +430,8 @@ async function generateAvatar() {
     if (img) { stamp(recolorHairZoned(getPixels(img))); }
   }
 
-  // 6. Hat (zoned recolor)
-  const hat = pick(HATS);
+  // 6. Hat (gender-matched, zoned recolor)
+  const hat = isMascHair ? pick(HATS_MASC) : pick(HATS_FEM);
   if (hat) {
     const img = await loadImage(hat);
     if (img) { stamp(recolorHairZoned(getPixels(img))); }
