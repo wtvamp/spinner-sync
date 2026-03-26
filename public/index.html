@@ -525,7 +525,7 @@
 <!-- Step 2: Avatar selection -->
 <div class="modal hidden" id="avatarModal">
   <h2>Choose Your Avatar!</h2>
-  <canvas class="selected-preview" id="avatarPreview" width="48" height="48"></canvas>
+  <canvas class="selected-preview" id="avatarPreview" width="64" height="64"></canvas>
   <div class="avatar-grid" id="avatarGrid"></div>
   <button class="modal-btn" onclick="joinRoom()">JOIN</button>
 </div>
@@ -557,443 +557,552 @@
 
 <script>
 // ========================================
-// STARDEW VALLEY STYLE AVATAR GENERATOR
+// STARDEW VALLEY STYLE AVATAR GENERATOR (64x64)
+// Authentic SDV portrait style: 64x64, 5-6 shades per feature,
+// top-right light source, hue-shifted shadows (cooler) and highlights (warmer)
 // ========================================
-const AV = 48; // avatar canvas size
+const AV = 64;
 const avatarDataUrls = [];
 
-// Helpers
-function hexToRgb(h){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return[r,g,b];}
-function rgbToHex(r,g,b){return '#'+[r,g,b].map(x=>Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0')).join('');}
-function darken(hex,amt){const[r,g,b]=hexToRgb(hex);return rgbToHex(r*amt,g*amt,b*amt);}
-function lighten(hex,amt){const[r,g,b]=hexToRgb(hex);return rgbToHex(r+(255-r)*amt,g+(255-g)*amt,b+(255-b)*amt);}
+// Color helpers with hue-shifting (SDV technique: shadows go cooler, highlights go warmer)
+function hexToRgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function rgb(r,g,b){return'rgb('+Math.round(Math.max(0,Math.min(255,r)))+','+Math.round(Math.max(0,Math.min(255,g)))+','+Math.round(Math.max(0,Math.min(255,b)))+')';}
+function shade(hex,mult,warmShift){
+  let[r,g,b]=hexToRgb(hex);
+  r*=mult;g*=mult;b*=mult;
+  if(warmShift>0){r+=warmShift*30;g+=warmShift*10;b-=warmShift*15;} // warmer
+  if(warmShift<0){r+=warmShift*10;g+=warmShift*5;b-=warmShift*20;}  // cooler
+  return rgb(r,g,b);
+}
 
-// Pixel drawing helper - draws a single "pixel" at grid position
-function px(ctx,x,y,color){ctx.fillStyle=color;ctx.fillRect(x,y,1,1);}
-// Draw a filled rect of pixels
-function rect(ctx,x,y,w,h,color){ctx.fillStyle=color;ctx.fillRect(x,y,w,h);}
+function px(c,x,y,col){c.fillStyle=col;c.fillRect(x,y,1,1);}
+function rect(c,x,y,w,h,col){c.fillStyle=col;c.fillRect(x,y,w,h);}
+function ellipse(c,cx,cy,rx,ry,col){
+  c.fillStyle=col;
+  for(let y=-ry;y<=ry;y++)for(let x=-rx;x<=rx;x++)
+    if((x*x)/(rx*rx)+(y*y)/(ry*ry)<=1)c.fillRect(cx+x,cy+y,1,1);
+}
 
-// Palette options
+// SDV-accurate palettes: 5-6 shades each, hue-shifted (shadows cooler, highlights warmer)
+// Extracted from actual SDV character portraits
 const SKINS = [
-  {base:'#fce4c0',shadow:'#e8c89c',highlight:'#fff0dc',blush:'#f5a0a0'},
-  {base:'#f5d0a0',shadow:'#dbb880',highlight:'#fce0b8',blush:'#e89090'},
-  {base:'#e8b888',shadow:'#c89868',highlight:'#f0c8a0',blush:'#d88888'},
-  {base:'#c89060',shadow:'#a87040',highlight:'#d8a878',blush:'#b87878'},
-  {base:'#a07048',shadow:'#885830',highlight:'#b88860',blush:'#986868'},
-  {base:'#784830',shadow:'#603820',highlight:'#906040',blush:'#785050'},
+  // Light (Abigail/Haley-like)
+  {s:['#5c3a28','#8a6040','#c49060','#e8bb8c','#f5dab8','#fef0e0']},
+  // Fair (Emily-like)
+  {s:['#604830','#906848','#c89870','#e8c098','#f5dcc0','#fff0e0']},
+  // Medium (Leah-like)
+  {s:['#503020','#784828','#a87048','#c89068','#e0b088','#f0d0b0']},
+  // Tan
+  {s:['#402818','#604020','#886038','#a88050','#c8a070','#e0c090']},
+  // Brown
+  {s:['#301810','#483018','#684828','#886040','#a88060','#c0a080']},
+  // Dark
+  {s:['#201008','#382018','#503020','#684030','#886048','#a08060']},
 ];
 
 const HAIRS = [
-  {base:'#2a1506',shadow:'#1a0c02',highlight:'#4a2810'},  // dark brown
-  {base:'#6b3520',shadow:'#4a2010',highlight:'#8a4830'},  // auburn
-  {base:'#c87030',shadow:'#a85818',highlight:'#e08848'},  // ginger
-  {base:'#f0c830',shadow:'#d0a818',highlight:'#f8d858'},  // blonde
-  {base:'#e84040',shadow:'#c02828',highlight:'#f06060'},  // red
-  {base:'#ff70a8',shadow:'#d85090',highlight:'#ff90c0'},  // pink
-  {base:'#8848b0',shadow:'#683090',highlight:'#a060c8'},  // purple
-  {base:'#4080d0',shadow:'#2860a8',highlight:'#60a0e8'},  // blue
-  {base:'#30b080',shadow:'#209060',highlight:'#50d0a0'},  // teal
-  {base:'#181818',shadow:'#080808',highlight:'#383838'},  // black
+  // dark brown - like Shane
+  {h:['#0c0804','#1c1008','#2c1c10','#3c2818','#503820','#684830']},
+  // auburn - like Leah
+  {h:['#281008','#481810','#703020','#904828','#b06030','#c87840']},
+  // ginger - like Penny
+  {h:['#482008','#684010','#906020','#b88030','#d8a040','#e8b858']},
+  // blonde - like Haley
+  {h:['#584010','#786020','#a88830','#c8a840','#e0c858','#f0e080']},
+  // red
+  {h:['#380808','#581010','#882020','#b03030','#d04040','#e06050']},
+  // pink - like Emily's streak
+  {h:['#501838','#783060','#a04880','#c060a0','#d878b8','#e890c8']},
+  // purple - like Abigail
+  {h:['#180830','#301060','#482088','#6030a8','#7848c0','#9060d0']},
+  // blue
+  {h:['#081830','#102860','#204088','#3060a8','#4878c0','#6090d0']},
+  // teal
+  {h:['#082820','#103828','#205040','#306850','#488068','#60a080']},
+  // black
+  {h:['#080808','#101010','#1c1c1c','#282828','#383838','#484848']},
 ];
 
-const EYES = ['#2858a0','#28a048','#784818','#682888','#a03030','#186878','#505050'];
-
-const SHIRTS = [
-  {base:'#d84040',shadow:'#b02828',highlight:'#f06060',detail:'#c03030'},  // red
-  {base:'#4088d0',shadow:'#2868a8',highlight:'#60a8f0',detail:'#3078c0'},  // blue
-  {base:'#40b868',shadow:'#289848',highlight:'#60d888',detail:'#30a858'},  // green
-  {base:'#d8a030',shadow:'#b88018',highlight:'#f0b848',detail:'#c89028'},  // gold
-  {base:'#9050b8',shadow:'#703898',highlight:'#a868d0',detail:'#8040a8'},  // purple
-  {base:'#e07890',shadow:'#c06078',highlight:'#f090a8',detail:'#d06880'},  // rose
-  {base:'#40b0b8',shadow:'#209098',highlight:'#60d0d8',detail:'#30a0a8'},  // teal
-  {base:'#e88040',shadow:'#c86828',highlight:'#f89858',detail:'#d87030'},  // orange
-  {base:'#f0f0f0',shadow:'#c8c8c8',highlight:'#ffffff',detail:'#d8d8d8'},  // white
-  {base:'#e0a0c0',shadow:'#c080a0',highlight:'#f0b8d0',detail:'#d090b0'},  // pastel pink
+const EYES_PAL = [
+  ['#0c1830','#183060','#285088','#3870a8'],   // blue
+  ['#081808','#103818','#205828','#387838'],     // green
+  ['#180c08','#382010','#584018','#786028'],     // brown
+  ['#180830','#301060','#502088','#7040a0'],     // purple
+  ['#301008','#581818','#803028','#a04838'],     // dark red/maroon
+  ['#081820','#103040','#205060','#387080'],     // grey-blue
 ];
 
-const OUTFITS = ['tee','blouse','overalls','dress','hoodie','vneck'];
-const ACC = ['none','bow','flower_crown','headband','earrings','necklace','glasses','hat','bandana','scarf'];
+const SHIRTS_PAL = [
+  // red - like Abigail's
+  {c:['#381010','#602020','#983030','#c04040','#d85858','#e87070']},
+  // blue - like Emily's
+  {c:['#081830','#183060','#284888','#3868a8','#5080c0','#6898d0']},
+  // green
+  {c:['#082010','#103818','#205830','#308048','#48a060','#60b878']},
+  // gold/yellow
+  {c:['#302008','#584010','#806020','#a88030','#c8a040','#e0b858']},
+  // purple
+  {c:['#180830','#301060','#482888','#6840a0','#8058b8','#9870c8']},
+  // pink/rose
+  {c:['#381028','#602040','#883858','#a85070','#c86888','#d880a0']},
+  // teal
+  {c:['#082028','#103840','#205860','#308078','#48a098','#60b8b0']},
+  // orange
+  {c:['#382008','#604010','#886020','#b08028','#c89838','#e0b048']},
+  // white/cream
+  {c:['#808080','#a0a0a0','#b8b8b8','#d0d0d0','#e8e8e8','#f8f8f8']},
+  // pastel pink
+  {c:['#503040','#785060','#987080','#b890a0','#d0a8b8','#e0c0d0']},
+];
+
+const OUTFITS = ['tee','blouse','overalls','dress','hoodie','collar'];
+const ACC = ['none','none','bow','flower_crown','headband','earrings','necklace','glasses','hat','bandana'];
 
 function generateAvatar(seed) {
   const c = document.createElement('canvas');
-  c.width = AV; c.height = AV;
+  c.width = 64; c.height = 64;
   const ctx = c.getContext('2d');
 
   let s = (seed * 2654435761 + 137) >>> 0;
   function rng(){s^=s<<13;s^=s>>17;s^=s<<5;return(s>>>0)/4294967296;}
   function pick(arr){return arr[Math.floor(rng()*arr.length)];}
+  function ri(n){return Math.floor(rng()*n);}
 
-  const skin = pick(SKINS);
-  const hair = pick(HAIRS);
-  const eyeColor = pick(EYES);
-  const shirt = pick(SHIRTS);
+  const sk = pick(SKINS).s; // skin shades [darkest..lightest]
+  const hr = pick(HAIRS).h;
+  const ep = pick(EYES_PAL);
+  const sp = pick(SHIRTS_PAL).c;
   const outfit = pick(OUTFITS);
   const acc = pick(ACC);
-  const hairIdx = Math.floor(rng()*10);
-  const hasBlush = rng() > 0.3;
-  const hasFringe = rng() > 0.3;
-  const lipColor = rng() > 0.5 ? '#c85060' : '#b84848';
+  const hairIdx = ri(10);
+  const hasBlush = rng() > 0.25;
+  const hasFringe = rng() > 0.2;
+  const lipShade = rng() > 0.5 ? '#b04858' : '#a04048';
+  const lipHi = rng() > 0.5 ? '#d06870' : '#c05860';
 
-  // BG - slight warm vignette like SDV portraits
-  const bg = ctx.createRadialGradient(24,20,5,24,24,30);
-  bg.addColorStop(0, 'rgba(60,40,80,0.3)');
-  bg.addColorStop(1, 'rgba(20,10,35,0.6)');
-  rect(ctx,0,0,48,48,'#1a0e2e');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0,0,48,48);
+  // sk[0]=deepest shadow, sk[5]=brightest highlight
+  // SDV light from top-right: right cheek highlight, left cheek shadow
 
-  // --- BODY / SHOULDERS ---
-  const bx=14, by=32; // body top-left
+  // -- BG: warm SDV portrait background --
+  const bg = ctx.createRadialGradient(34,28,8,32,32,40);
+  bg.addColorStop(0,'#483858');bg.addColorStop(1,'#1a0e2e');
+  rect(ctx,0,0,64,64,'#1a0e2e');ctx.fillStyle=bg;ctx.fillRect(0,0,64,64);
+
+  // -- BODY / SHOULDERS (y:42-63) --
+  const bx=12, by=42;
+  // Base shoulder shape
+  rect(ctx,bx,by+3,40,22,sp[2]);
+  rect(ctx,bx+4,by+1,32,22,sp[2]);
+  rect(ctx,bx+8,by,24,2,sp[2]);
+  // Highlight right shoulder (light from top-right)
+  rect(ctx,bx+22,by+2,16,6,sp[3]);
+  rect(ctx,bx+28,by+4,10,8,sp[4]);
+  // Shadow left shoulder
+  rect(ctx,bx,by+5,8,16,sp[1]);
+  rect(ctx,bx+4,by+3,6,4,sp[1]);
+
   if(outfit==='dress'){
-    // Dress with puff shoulders
-    rect(ctx,bx-2,by+2,24,14,shirt.base);
-    rect(ctx,bx,by,20,14,shirt.base);
-    rect(ctx,bx+1,by+1,18,2,shirt.highlight);
-    rect(ctx,bx-2,by+2,4,5,shirt.base); // left shoulder puff
-    rect(ctx,bx+18,by+2,4,5,shirt.base);
-    rect(ctx,bx-1,by+3,3,3,shirt.highlight);
-    rect(ctx,bx+18,by+3,3,3,shirt.highlight);
-    // Neckline
-    rect(ctx,bx+7,by,6,3,skin.base);
-    rect(ctx,bx+8,by,4,2,skin.highlight);
-    // Dress detail
-    rect(ctx,bx+2,by+6,16,1,shirt.detail);
-    rect(ctx,bx+8,by+3,4,1,shirt.shadow);
+    // V-neckline
+    for(let i=0;i<5;i++){rect(ctx,28-i,by+i,2+i*2,1,sk[3]);}
+    rect(ctx,29,by,2,1,sk[4]);
+    // Ruffle detail
+    for(let i=0;i<8;i++) px(ctx,bx+8+i*3,by+10,sp[1]);
+    // Puff sleeves
+    ellipse(ctx,bx+5,by+5,5,4,sp[3]);ellipse(ctx,bx+5,by+5,3,2,sp[4]);
+    ellipse(ctx,bx+35,by+5,5,4,sp[3]);ellipse(ctx,bx+35,by+5,3,2,sp[4]);
   } else if(outfit==='overalls'){
-    // Undershirt
-    rect(ctx,bx,by,20,14,shirt.base);
-    rect(ctx,bx-2,by+2,24,12,shirt.base);
-    rect(ctx,bx+1,by+1,18,2,shirt.highlight);
-    // Overalls
-    rect(ctx,bx+2,by+5,16,10,'#5878a8');
-    rect(ctx,bx+3,by+5,14,1,'#6888b8');
+    // Undershirt shows at top
+    rect(ctx,bx+10,by,20,6,sp[3]);rect(ctx,bx+12,by+1,16,3,sp[4]);
+    // Overall bib
+    rect(ctx,bx+12,by+5,16,18,'#5070a0');
+    rect(ctx,bx+14,by+6,12,4,'#6080b0');
     // Straps
-    rect(ctx,bx+4,by+1,3,5,'#5878a8');
-    rect(ctx,bx+13,by+1,3,5,'#5878a8');
-    rect(ctx,bx+5,by+2,1,3,'#6888b8');
-    rect(ctx,bx+14,by+2,1,3,'#6888b8');
-    // Pocket
-    rect(ctx,bx+7,by+8,6,4,'#486898');
-    rect(ctx,bx+8,by+9,4,2,'#5878a8');
-    // Neck
-    rect(ctx,bx+7,by,6,2,skin.base);
-  } else if(outfit==='hoodie'){
-    rect(ctx,bx-2,by+1,24,14,shirt.base);
-    rect(ctx,bx,by,20,14,shirt.base);
-    rect(ctx,bx+1,by+1,18,3,shirt.highlight);
-    // Hood lines
-    rect(ctx,bx+7,by,6,3,skin.base);
-    rect(ctx,bx+5,by,2,4,shirt.shadow);
-    rect(ctx,bx+13,by,2,4,shirt.shadow);
-    // Pocket
-    rect(ctx,bx+5,by+8,10,4,shirt.shadow);
-    rect(ctx,bx+6,by+9,8,2,shirt.base);
-    // Drawstring
-    px(ctx,bx+9,by+3,shirt.detail);
-    px(ctx,bx+10,by+4,shirt.detail);
-    px(ctx,bx+11,by+3,shirt.detail);
-  } else if(outfit==='blouse'){
-    rect(ctx,bx-1,by+1,22,14,shirt.base);
-    rect(ctx,bx,by,20,14,shirt.base);
-    // Rounded collar
-    rect(ctx,bx+6,by,8,3,skin.base);
-    rect(ctx,bx+5,by+1,2,2,shirt.highlight);
-    rect(ctx,bx+13,by+1,2,2,shirt.highlight);
+    rect(ctx,bx+14,by+1,3,6,'#5070a0');rect(ctx,bx+23,by+1,3,6,'#5070a0');
+    rect(ctx,bx+15,by+2,1,4,'#6080b0');rect(ctx,bx+24,by+2,1,4,'#6080b0');
     // Buttons
-    for(let i=0;i<3;i++) px(ctx,bx+10,by+4+i*2,shirt.detail);
-    rect(ctx,bx+1,by+1,4,2,shirt.highlight);
-    rect(ctx,bx+15,by+1,4,2,shirt.highlight);
-    // Slight puff sleeve
-    rect(ctx,bx-2,by+2,3,4,shirt.base);
-    rect(ctx,bx+19,by+2,3,4,shirt.base);
-  } else if(outfit==='vneck'){
-    rect(ctx,bx-1,by+1,22,14,shirt.base);
-    rect(ctx,bx,by,20,14,shirt.base);
-    // V-neck
-    rect(ctx,bx+7,by,6,2,skin.base);
-    rect(ctx,bx+8,by+2,4,2,skin.base);
-    rect(ctx,bx+9,by+4,2,1,skin.base);
-    // V lines
-    px(ctx,bx+7,by+2,shirt.shadow);
-    px(ctx,bx+8,by+3,shirt.shadow);
-    px(ctx,bx+12,by+2,shirt.shadow);
-    px(ctx,bx+11,by+3,shirt.shadow);
-    rect(ctx,bx+1,by+1,5,2,shirt.highlight);
-    rect(ctx,bx+14,by+1,5,2,shirt.highlight);
+    px(ctx,bx+14,by+5,'#ffd700');px(ctx,bx+25,by+5,'#ffd700');
+    // Pocket
+    rect(ctx,bx+16,by+12,8,5,'#406090');rect(ctx,bx+17,by+13,6,3,'#5070a0');
+  } else if(outfit==='hoodie'){
+    // Hood collar
+    rect(ctx,bx+10,by,20,4,sp[1]);
+    ellipse(ctx,bx+14,by+2,5,3,sp[1]);ellipse(ctx,bx+26,by+2,5,3,sp[1]);
+    // Kangaroo pocket
+    rect(ctx,bx+14,by+12,12,6,sp[1]);rect(ctx,bx+15,by+13,10,4,sp[2]);
+    // Drawstrings
+    px(ctx,bx+18,by+4,sp[4]);px(ctx,bx+19,by+5,sp[4]);
+    px(ctx,bx+22,by+4,sp[4]);px(ctx,bx+21,by+5,sp[4]);
+    // Center seam
+    for(let i=0;i<10;i++) px(ctx,30,by+4+i,sp[1]);
+  } else if(outfit==='blouse'){
+    // Wider neckline
+    rect(ctx,24,by,12,3,sk[3]);rect(ctx,25,by,10,2,sk[4]);
+    // Peter pan collar
+    ellipse(ctx,22,by+2,5,3,sp[4]);ellipse(ctx,38,by+2,5,3,sp[4]);
+    rect(ctx,23,by+1,4,2,sp[5]);rect(ctx,35,by+1,4,2,sp[5]);
+    // Buttons down center
+    for(let i=0;i<4;i++) px(ctx,30,by+5+i*3,sp[0]);
+    // Puff sleeves
+    ellipse(ctx,bx+4,by+5,5,4,sp[3]);ellipse(ctx,bx+36,by+5,5,4,sp[3]);
+  } else if(outfit==='collar'){
+    // Collared shirt
+    rect(ctx,24,by,12,2,sk[3]);
+    // Collar points
+    rect(ctx,21,by+1,5,3,sp[4]);rect(ctx,34,by+1,5,3,sp[4]);
+    rect(ctx,22,by+1,3,2,sp[5]);rect(ctx,35,by+1,3,2,sp[5]);
+    // Collar shadow
+    px(ctx,21,by+3,sp[2]);px(ctx,38,by+3,sp[2]);
+    // Buttons
+    for(let i=0;i<3;i++) px(ctx,30,by+4+i*3,sp[0]);
   } else { // tee
-    rect(ctx,bx-1,by+1,22,14,shirt.base);
-    rect(ctx,bx,by,20,14,shirt.base);
-    rect(ctx,bx+7,by,6,2,skin.base);
-    rect(ctx,bx+1,by+1,5,2,shirt.highlight);
-    rect(ctx,bx+14,by+1,5,2,shirt.highlight);
-    // Sleeve lines
-    rect(ctx,bx-1,by+5,2,1,shirt.shadow);
-    rect(ctx,bx+19,by+5,2,1,shirt.shadow);
+    // Round neckline
+    rect(ctx,24,by,12,3,sk[3]);rect(ctx,26,by,8,2,sk[4]);
+    // Sleeve hems
+    rect(ctx,bx,by+8,4,1,sp[1]);rect(ctx,bx+36,by+8,4,1,sp[1]);
   }
 
-  // --- NECK ---
-  rect(ctx,19,29,10,5,skin.base);
-  rect(ctx,20,29,8,4,skin.highlight);
-  rect(ctx,19,32,2,2,skin.shadow);
-  rect(ctx,27,32,2,2,skin.shadow);
+  // -- NECK (centered, y:38-44) --
+  rect(ctx,25,38,10,7,sk[3]);
+  rect(ctx,26,38,8,5,sk[4]);
+  // Right side highlight
+  rect(ctx,30,38,4,5,sk[4]);rect(ctx,32,39,2,3,sk[5]);
+  // Left shadow
+  rect(ctx,25,39,2,4,sk[2]);
+  // Under-chin shadow
+  rect(ctx,26,38,8,1,sk[2]);
 
-  // --- HEAD ---
-  const hx=12,hy=6;
-  // Head shape - rounded
-  rect(ctx,hx+2,hy,20,24,skin.base);
-  rect(ctx,hx+1,hy+2,22,20,skin.base);
-  rect(ctx,hx,hy+4,24,16,skin.base);
-  // Highlights
-  rect(ctx,hx+3,hy+1,18,4,skin.highlight);
-  rect(ctx,hx+2,hy+3,6,8,skin.highlight);
-  // Jaw shadow
-  rect(ctx,hx+1,hy+20,22,2,skin.shadow);
-  rect(ctx,hx+2,hy+22,20,2,skin.shadow);
-  rect(ctx,hx+4,hy+24,16,1,skin.shadow);
+  // -- HEAD (centered around x:14-50, y:4-40) --
+  // Main face fill - rounded shape
+  ellipse(ctx,32,22,17,18,sk[3]);
+  // Right cheek highlight (light from top-right)
+  ellipse(ctx,36,20,10,12,sk[4]);
+  ellipse(ctx,38,18,6,8,sk[5]);
+  // Left cheek shadow
+  ellipse(ctx,20,24,6,10,sk[2]);
+  // Forehead highlight
+  rect(ctx,24,6,16,6,sk[4]);rect(ctx,28,5,10,4,sk[5]);
+  // Jaw definition - shadow underneath
+  for(let i=0;i<6;i++){
+    ctx.globalAlpha=0.3-i*0.05;
+    ellipse(ctx,32,36+i,16-i,2,sk[1]);
+  }
+  ctx.globalAlpha=1;
+  // Chin
+  ellipse(ctx,32,36,8,3,sk[3]);
 
-  // --- EARS ---
-  rect(ctx,hx-1,hy+10,2,5,skin.base);
-  rect(ctx,hx+23,hy+10,2,5,skin.base);
-  px(ctx,hx-1,hy+11,skin.shadow);
-  px(ctx,hx+24,hy+11,skin.shadow);
+  // -- EARS --
+  // Left ear (shadow side)
+  ellipse(ctx,14,22,3,4,sk[2]);ellipse(ctx,14,22,2,3,sk[3]);px(ctx,14,22,sk[1]);
+  // Right ear (highlight side)
+  ellipse(ctx,50,22,3,4,sk[3]);ellipse(ctx,50,22,2,3,sk[4]);px(ctx,50,22,sk[2]);
 
-  // --- EYES ---
-  const ey=hy+11, lex=hx+4, rex=hx+14;
-  // White
-  rect(ctx,lex,ey,5,4,'#fff');
-  rect(ctx,rex,ey,5,4,'#fff');
-  // Eye outline (top)
-  rect(ctx,lex,ey-1,5,1,'#2a1a10');
-  rect(ctx,rex,ey-1,5,1,'#2a1a10');
+  // -- EYES (y~18-24) --
+  const ey=19, lex=22, rex=36;
+  // Eye sockets - slight shadow
+  ellipse(ctx,lex+3,ey+2,5,3,sk[2]);
+  ellipse(ctx,rex+3,ey+2,5,3,sk[2]);
+  // Whites
+  ellipse(ctx,lex+3,ey+2,4,3,'#f0ece8');
+  ellipse(ctx,rex+3,ey+2,4,3,'#f0ece8');
+  // Lower white shadow
+  rect(ctx,lex,ey+3,7,1,'#d8d0c8');rect(ctx,rex,ey+3,7,1,'#d8d0c8');
   // Iris
-  rect(ctx,lex+1,ey,3,4,eyeColor);
-  rect(ctx,rex+1,ey,3,4,eyeColor);
-  // Iris highlight
-  rect(ctx,lex+1,ey,2,2,lighten(eyeColor,0.3));
-  rect(ctx,rex+1,ey,2,2,lighten(eyeColor,0.3));
+  ellipse(ctx,lex+3,ey+2,3,3,ep[2]);
+  ellipse(ctx,rex+3,ey+2,3,3,ep[2]);
+  // Iris top (darker)
+  rect(ctx,lex+1,ey,5,2,ep[1]);rect(ctx,rex+1,ey,5,2,ep[1]);
   // Pupil
-  rect(ctx,lex+2,ey+1,2,2,'#101010');
-  rect(ctx,rex+2,ey+1,2,2,'#101010');
-  // Sparkle
-  px(ctx,lex+1,ey,'#fff');
-  px(ctx,rex+1,ey,'#fff');
-  // Lower lid
-  px(ctx,lex,ey+3,skin.shadow);
-  px(ctx,lex+4,ey+3,skin.shadow);
-  px(ctx,rex,ey+3,skin.shadow);
-  px(ctx,rex+4,ey+3,skin.shadow);
+  ellipse(ctx,lex+3,ey+2,2,2,ep[0]);
+  ellipse(ctx,rex+3,ey+2,2,2,ep[0]);
+  // Highlight sparkles (top-right light)
+  px(ctx,lex+4,ey,'#fff');px(ctx,lex+5,ey+1,'#fff');
+  px(ctx,rex+4,ey,'#fff');px(ctx,rex+5,ey+1,'#fff');
+  // Secondary sparkle (bottom-left, dimmer)
+  ctx.globalAlpha=0.5;
+  px(ctx,lex+1,ey+3,'#f0e8e0');px(ctx,rex+1,ey+3,'#f0e8e0');
+  ctx.globalAlpha=1;
+  // Upper eyelid line
+  rect(ctx,lex,ey-1,7,1,'#1c1410');rect(ctx,rex,ey-1,7,1,'#1c1410');
+  // Outer corners
+  px(ctx,lex-1,ey,'#1c1410');px(ctx,lex+7,ey,'#1c1410');
+  px(ctx,rex-1,ey,'#1c1410');px(ctx,rex+7,ey,'#1c1410');
   // Lashes
-  px(ctx,lex-1,ey-1,'#2a1a10');
-  px(ctx,lex+5,ey-1,'#2a1a10');
-  px(ctx,rex-1,ey-1,'#2a1a10');
-  px(ctx,rex+5,ey-1,'#2a1a10');
-  // Eyebrows
-  rect(ctx,lex,ey-3,5,1,darken(hair.base,0.7));
-  rect(ctx,rex,ey-3,5,1,darken(hair.base,0.7));
-  px(ctx,lex-1,ey-2,darken(hair.base,0.7));
-  px(ctx,rex+5,ey-2,darken(hair.base,0.7));
+  px(ctx,lex-1,ey-1,'#1c1410');px(ctx,lex+7,ey-1,'#1c1410');
+  px(ctx,rex-1,ey-1,'#1c1410');px(ctx,rex+7,ey-1,'#1c1410');
+  px(ctx,lex,ey-2,'#1c1410');px(ctx,rex+6,ey-2,'#1c1410');
+  // Lower lash line (subtle)
+  ctx.globalAlpha=0.3;
+  rect(ctx,lex+1,ey+4,5,1,sk[1]);rect(ctx,rex+1,ey+4,5,1,sk[1]);
+  ctx.globalAlpha=1;
 
-  // --- NOSE ---
-  px(ctx,hx+12,hy+16,skin.shadow);
-  px(ctx,hx+11,hy+17,skin.shadow);
-  px(ctx,hx+12,hy+17,darken(skin.base,0.85));
+  // -- EYEBROWS --
+  const ebCol=hr[1];
+  rect(ctx,lex-1,ey-4,8,2,ebCol);
+  rect(ctx,rex,ey-4,8,2,ebCol);
+  // Brow arch
+  px(ctx,lex-1,ey-3,ebCol);px(ctx,lex+7,ey-5,ebCol);
+  px(ctx,rex-1,ey-5,ebCol);px(ctx,rex+8,ey-3,ebCol);
+  // Highlight on brow bone
+  rect(ctx,lex,ey-3,7,1,sk[4]);rect(ctx,rex+1,ey-3,7,1,sk[4]);
 
-  // --- MOUTH ---
-  rect(ctx,hx+8,hy+20,8,1,lipColor);
-  rect(ctx,hx+9,hy+21,6,1,lighten(lipColor,0.15));
-  px(ctx,hx+7,hy+20,darken(lipColor,0.8));
-  px(ctx,hx+16,hy+20,darken(lipColor,0.8));
-  // Smile highlight
-  px(ctx,hx+10,hy+20,lighten(lipColor,0.2));
-  px(ctx,hx+11,hy+20,lighten(lipColor,0.2));
+  // -- NOSE --
+  // Subtle SDV-style nose: shadow on left, highlight on right
+  px(ctx,31,27,sk[2]);px(ctx,30,28,sk[2]);px(ctx,31,28,sk[1]);
+  px(ctx,32,28,sk[2]);px(ctx,33,27,sk[4]);
+  // Nostril hint
+  px(ctx,30,29,sk[2]);px(ctx,32,29,sk[2]);
+  px(ctx,31,29,sk[3]);
 
-  // --- BLUSH ---
+  // -- MOUTH --
+  // Upper lip
+  rect(ctx,27,32,8,1,lipShade);
+  px(ctx,26,32,sk[2]);px(ctx,35,32,sk[2]); // corners
+  // Lower lip (highlighted)
+  rect(ctx,28,33,6,2,lipHi);
+  rect(ctx,29,34,4,1,lipShade);
+  // Lip highlight
+  px(ctx,30,33,'#d87880');px(ctx,31,33,'#d87880');
+  // Mouth line
+  rect(ctx,28,32,6,1,'#602828');
+  // Chin dimple
+  px(ctx,31,36,sk[2]);
+
+  // -- BLUSH --
   if(hasBlush){
-    ctx.globalAlpha=0.35;
-    rect(ctx,hx+1,hy+16,4,3,skin.blush);
-    rect(ctx,hx+19,hy+16,4,3,skin.blush);
-    ctx.globalAlpha=0.2;
-    rect(ctx,hx+2,hy+15,3,1,skin.blush);
-    rect(ctx,hx+19,hy+15,3,1,skin.blush);
+    ctx.globalAlpha=0.25;
+    ellipse(ctx,20,28,4,3,'#e08888');
+    ellipse(ctx,42,27,4,3,'#e08888');
+    ctx.globalAlpha=0.15;
+    ellipse(ctx,20,28,5,4,'#e08888');
+    ellipse(ctx,42,27,5,4,'#e08888');
     ctx.globalAlpha=1;
   }
 
-  // --- HAIR ---
-  const hb=hair.base, hs=hair.shadow, hh=hair.highlight;
-  // All styles start with top-of-head coverage
-  rect(ctx,hx+1,hy-2,22,6,hb);
-  rect(ctx,hx+2,hy-3,20,4,hb);
-  rect(ctx,hx+4,hy-4,16,3,hb);
-  // Top highlight
-  rect(ctx,hx+5,hy-3,10,2,hh);
-  rect(ctx,hx+4,hy-2,6,1,hh);
+  // -- HAIR --
+  // SDV hair: 5-6 shades, big shapes with strand details
+  // hr[0]=deepest, hr[5]=brightest highlight
+  const H=hr;
 
-  switch(hairIdx % 10){
-    case 0: // Long flowing
-      rect(ctx,hx-2,hy,3,26,hb);rect(ctx,hx+23,hy,3,26,hb);
-      rect(ctx,hx-1,hy-1,2,24,hh);rect(ctx,hx+24,hy-1,1,20,hh);
-      rect(ctx,hx-3,hy+10,3,18,hb);rect(ctx,hx+24,hy+10,3,18,hb);
-      rect(ctx,hx-2,hy+12,2,14,hs);rect(ctx,hx+25,hy+12,1,12,hs);
-      // Strand details
-      for(let i=0;i<4;i++){px(ctx,hx-2,hy+20+i*2,hh);px(ctx,hx+25,hy+18+i*2,hh);}
-      if(hasFringe){rect(ctx,hx+2,hy+2,8,4,hb);rect(ctx,hx+3,hy+2,4,3,hh);px(ctx,hx+5,hy+5,hb);}
-      break;
-    case 1: // Bob with bangs
-      rect(ctx,hx-1,hy,2,18,hb);rect(ctx,hx+23,hy,2,18,hb);
-      rect(ctx,hx-2,hy+4,3,12,hb);rect(ctx,hx+23,hy+4,3,12,hb);
-      rect(ctx,hx-1,hy+2,2,8,hh);
+  // Base top-of-head (all styles share this)
+  ellipse(ctx,32,10,18,10,H[2]);
+  ellipse(ctx,34,9,14,8,H[3]); // highlight right side
+  rect(ctx,16,8,30,6,H[2]);
+  rect(ctx,20,5,22,5,H[2]);
+  // Crown highlight
+  ellipse(ctx,36,7,8,4,H[4]);
+  ellipse(ctx,37,6,4,2,H[5]);
+
+  // Sideburns/sides (base for all)
+  rect(ctx,13,12,4,14,H[2]);rect(ctx,47,12,4,14,H[2]);
+  rect(ctx,14,12,2,10,H[3]);rect(ctx,48,12,2,8,H[4]);
+
+  switch(hairIdx%10){
+    case 0: // Long flowing (like Haley)
+      rect(ctx,10,14,5,34,H[2]);rect(ctx,49,14,5,34,H[2]);
+      rect(ctx,8,20,4,30,H[2]);rect(ctx,52,20,4,30,H[2]);
+      // Strand highlights
+      rect(ctx,11,16,2,28,H[3]);rect(ctx,50,16,2,24,H[4]);
+      rect(ctx,9,24,2,20,H[1]);rect(ctx,53,24,1,18,H[3]);
+      // Wispy ends
+      for(let i=0;i<5;i++){px(ctx,9+ri(3),44+i,H[3]);px(ctx,52+ri(3),42+i,H[4]);}
       // Bangs
-      rect(ctx,hx+2,hy+1,20,4,hb);rect(ctx,hx+3,hy+2,8,2,hh);
-      rect(ctx,hx+2,hy+4,6,2,hb);
-      // Bob curl ends
-      rect(ctx,hx-2,hy+15,4,2,hh);rect(ctx,hx+22,hy+15,4,2,hh);
+      if(hasFringe){rect(ctx,18,10,12,8,H[2]);rect(ctx,20,11,8,5,H[3]);
+        for(let i=0;i<4;i++) px(ctx,19+i*3,16,H[4]);}
       break;
-    case 2: // High ponytail
-      rect(ctx,hx-1,hy,2,12,hb);rect(ctx,hx+23,hy,2,12,hb);
-      // Ponytail going right
-      rect(ctx,hx+20,hy-4,6,6,hb);rect(ctx,hx+24,hy-2,4,4,hb);
-      rect(ctx,hx+26,hy,3,12,hb);rect(ctx,hx+27,hy+2,2,14,hb);
-      rect(ctx,hx+21,hy-3,4,3,hh);rect(ctx,hx+27,hy+4,1,8,hh);
+    case 1: // Bob (like Penny)
+      rect(ctx,10,14,5,20,H[2]);rect(ctx,49,14,5,20,H[2]);
+      rect(ctx,9,18,4,14,H[1]);rect(ctx,50,18,4,14,H[1]);
+      rect(ctx,11,16,3,16,H[3]);rect(ctx,50,16,3,12,H[4]);
+      // Curl at ends
+      ellipse(ctx,11,33,4,3,H[3]);ellipse(ctx,53,33,4,3,H[3]);
+      // Full bangs
+      rect(ctx,16,8,26,10,H[2]);rect(ctx,18,10,20,6,H[3]);
+      rect(ctx,20,9,10,4,H[4]);
+      for(let i=0;i<6;i++) px(ctx,17+i*4,15+ri(2),H[1]);
+      break;
+    case 2: // Ponytail (like Abigail)
+      // Pulled back sides
+      rect(ctx,12,12,4,8,H[2]);rect(ctx,48,12,4,8,H[2]);
+      // Ponytail flowing right
+      rect(ctx,44,4,8,8,H[2]);rect(ctx,50,8,6,6,H[2]);
+      rect(ctx,52,12,6,20,H[2]);rect(ctx,54,18,5,24,H[2]);
+      rect(ctx,53,14,4,18,H[3]);rect(ctx,55,22,3,16,H[4]);
       // Hair tie
-      rect(ctx,hx+24,hy-1,2,3,'#d84040');
-      if(hasFringe){rect(ctx,hx+2,hy+2,7,3,hb);rect(ctx,hx+3,hy+2,3,2,hh);}
+      rect(ctx,50,9,4,3,'#d84048');rect(ctx,51,10,2,1,'#e86070');
+      // Bangs
+      rect(ctx,16,9,16,8,H[2]);rect(ctx,18,10,10,5,H[3]);
+      px(ctx,22,14,H[4]);px(ctx,26,13,H[4]);
       break;
     case 3: // Pigtails
-      rect(ctx,hx-1,hy,2,10,hb);rect(ctx,hx+23,hy,2,10,hb);
       // Left pigtail
-      rect(ctx,hx-4,hy+4,4,4,hb);rect(ctx,hx-5,hy+6,4,16,hb);rect(ctx,hx-4,hy+8,3,12,hh);
+      rect(ctx,6,14,6,6,H[2]);rect(ctx,4,18,6,28,H[2]);rect(ctx,2,24,5,22,H[2]);
+      rect(ctx,5,20,3,22,H[3]);rect(ctx,3,28,2,14,H[1]);
       // Right pigtail
-      rect(ctx,hx+24,hy+4,4,4,hb);rect(ctx,hx+25,hy+6,4,16,hb);rect(ctx,hx+25,hy+8,3,12,hh);
+      rect(ctx,52,14,6,6,H[2]);rect(ctx,54,18,6,28,H[2]);rect(ctx,57,24,5,22,H[2]);
+      rect(ctx,55,20,3,22,H[4]);rect(ctx,58,28,2,14,H[3]);
       // Hair ties
-      rect(ctx,hx-3,hy+5,3,2,'#ff70a8');rect(ctx,hx+24,hy+5,3,2,'#ff70a8');
-      // Bangs
-      rect(ctx,hx+2,hy+1,20,4,hb);rect(ctx,hx+4,hy+2,6,2,hh);
-      rect(ctx,hx+8,hy+4,8,2,hb);
+      ellipse(ctx,8,16,3,2,'#ff70a8');ellipse(ctx,56,16,3,2,'#ff70a8');
+      // Bangs - split
+      rect(ctx,16,9,12,8,H[2]);rect(ctx,32,9,12,8,H[2]);
+      rect(ctx,18,10,8,5,H[3]);rect(ctx,34,10,8,5,H[3]);
+      rect(ctx,28,10,4,6,sk[4]); // part
       break;
-    case 4: // Short pixie
-      rect(ctx,hx-1,hy-1,2,10,hb);rect(ctx,hx+23,hy-1,2,8,hb);
-      rect(ctx,hx,hy,24,5,hb);rect(ctx,hx+2,hy+1,10,3,hh);
-      // Textured top
-      for(let i=0;i<5;i++){px(ctx,hx+4+i*3,hy-4+Math.floor(rng()*2),hb);px(ctx,hx+3+i*3,hy-3,hh);}
-      rect(ctx,hx+6,hy-5,12,3,hb);rect(ctx,hx+8,hy-4,6,2,hh);
-      break;
-    case 5: // Curly/wavy
-      rect(ctx,hx-2,hy-1,3,22,hb);rect(ctx,hx+23,hy-1,3,22,hb);
-      rect(ctx,hx-3,hy+6,3,16,hb);rect(ctx,hx+24,hy+6,3,16,hb);
-      // Curly texture
-      for(let i=0;i<6;i++){
-        const cy=hy+4+i*3;
-        px(ctx,hx-3,cy,hh);px(ctx,hx-2,cy+1,hs);
-        px(ctx,hx+25,cy,hh);px(ctx,hx+24,cy+1,hs);
+    case 4: // Pixie
+      rect(ctx,12,10,4,8,H[2]);rect(ctx,48,10,4,6,H[2]);
+      // Textured volume on top
+      ellipse(ctx,32,6,16,7,H[2]);
+      ellipse(ctx,34,5,12,5,H[3]);ellipse(ctx,36,4,6,3,H[4]);
+      // Spiky bits
+      for(let i=0;i<5;i++){
+        const sx=18+i*6+ri(3),sy=2-ri(3);
+        rect(ctx,sx,sy,3,6-ri(2),H[2+ri(2)]);
       }
-      // Volume on top
-      rect(ctx,hx+3,hy-5,18,4,hb);rect(ctx,hx+6,hy-4,10,2,hh);
-      // Curly bangs
-      rect(ctx,hx+2,hy+1,8,5,hb);rect(ctx,hx+3,hy+2,3,2,hh);
-      px(ctx,hx+6,hy+4,hh);px(ctx,hx+4,hy+5,hb);
+      // Short side
+      rect(ctx,12,10,3,6,H[3]);
       break;
-    case 6: // Elegant bun
-      rect(ctx,hx-1,hy,2,12,hb);rect(ctx,hx+23,hy,2,12,hb);
-      // Bun on top
-      rect(ctx,hx+8,hy-8,8,6,hb);rect(ctx,hx+7,hy-7,10,5,hb);
-      rect(ctx,hx+9,hy-7,6,3,hh);rect(ctx,hx+10,hy-6,4,1,lighten(hh,0.2));
-      // Pin/ornament
-      rect(ctx,hx+14,hy-6,2,2,'#ffd700');px(ctx,hx+15,hy-7,'#ffd700');
-      // Side strands
-      rect(ctx,hx,hy+4,2,8,hb);rect(ctx,hx+22,hy+4,2,8,hb);
-      if(hasFringe){rect(ctx,hx+2,hy+2,7,3,hb);rect(ctx,hx+3,hy+2,3,2,hh);}
-      break;
-    case 7: // Side-swept
-      rect(ctx,hx-1,hy,2,14,hb);rect(ctx,hx+23,hy,2,10,hb);
-      // Big side sweep
-      rect(ctx,hx+1,hy+1,14,5,hb);rect(ctx,hx+2,hy+2,6,3,hh);
-      rect(ctx,hx-2,hy+4,4,6,hb);rect(ctx,hx-3,hy+6,3,10,hb);
-      rect(ctx,hx-2,hy+8,2,6,hh);
-      // Sweep across forehead
-      rect(ctx,hx+2,hy+4,12,2,hb);rect(ctx,hx+3,hy+4,4,1,hh);
-      break;
-    case 8: // Braids
-      rect(ctx,hx-1,hy,2,10,hb);rect(ctx,hx+23,hy,2,10,hb);
-      // Left braid
-      for(let i=0;i<7;i++){
-        const by2=hy+8+i*3;
-        rect(ctx,hx-3,by2,3,2,(i%2)?hb:hh);
-        rect(ctx,hx-4,by2+1,2,2,(i%2)?hh:hb);
+    case 5: // Curly volume (like big curly)
+      // Big volume all around
+      ellipse(ctx,32,14,22,16,H[2]);
+      ellipse(ctx,36,12,16,12,H[3]);
+      ellipse(ctx,38,10,8,6,H[4]);
+      // Curl texture
+      for(let i=0;i<12;i++){
+        const cx2=14+ri(36),cy2=6+ri(26);
+        ellipse(ctx,cx2,cy2,3,3,H[ri(3)+1]);
+        px(ctx,cx2+1,cy2-1,H[4]);
       }
-      // Right braid
-      for(let i=0;i<7;i++){
-        const by2=hy+8+i*3;
-        rect(ctx,hx+24,by2,3,2,(i%2)?hb:hh);
-        rect(ctx,hx+25,by2+1,2,2,(i%2)?hh:hb);
+      // Side volume
+      rect(ctx,8,16,6,24,H[2]);rect(ctx,50,16,6,24,H[2]);
+      rect(ctx,9,18,3,18,H[3]);rect(ctx,51,18,3,16,H[4]);
+      // Curl strands at ends
+      for(let i=0;i<4;i++){ellipse(ctx,9+ri(3),38+i*3,2,2,H[3]);ellipse(ctx,52+ri(3),36+i*3,2,2,H[3]);}
+      break;
+    case 6: // Elegant updo/bun (like Jodi)
+      rect(ctx,13,12,3,10,H[2]);rect(ctx,48,12,3,10,H[2]);
+      // Bun
+      ellipse(ctx,32,0,8,7,H[2]);
+      ellipse(ctx,34,0,6,5,H[3]);
+      ellipse(ctx,35,-1,3,3,H[4]);
+      // Ornament
+      ellipse(ctx,38,2,2,2,'#ffd700');px(ctx,39,1,'#fff8d0');
+      // Wispy side strands
+      rect(ctx,14,14,2,12,H[3]);rect(ctx,48,14,2,10,H[4]);
+      // Swept bangs
+      rect(ctx,16,9,18,7,H[2]);rect(ctx,18,10,12,4,H[3]);
+      ellipse(ctx,22,12,4,2,H[4]);
+      break;
+    case 7: // Side-swept (like Maru)
+      // Heavy on left side
+      rect(ctx,8,10,8,24,H[2]);rect(ctx,6,16,6,18,H[2]);
+      rect(ctx,9,12,4,18,H[3]);rect(ctx,7,18,3,12,H[1]);
+      // Swept bangs covering left eye partially
+      rect(ctx,14,8,20,10,H[2]);rect(ctx,16,9,14,7,H[3]);
+      rect(ctx,14,12,8,5,H[2]); // drapes over left
+      rect(ctx,15,13,4,3,H[3]);
+      // Short right side
+      rect(ctx,48,12,4,10,H[2]);rect(ctx,49,13,2,6,H[4]);
+      break;
+    case 8: // Braids (like Abigail variant)
+      // Two braids
+      for(let i=0;i<8;i++){
+        const by2=16+i*4;
+        // Left braid - alternating overlap
+        ellipse(ctx,10,by2,3,2,(i%2)?H[3]:H[2]);
+        ellipse(ctx,12,by2+2,3,2,(i%2)?H[2]:H[3]);
+        // Right braid
+        ellipse(ctx,54,by2,3,2,(i%2)?H[3]:H[4]);
+        ellipse(ctx,52,by2+2,3,2,(i%2)?H[4]:H[3]);
       }
       // Braid ties
-      rect(ctx,hx-3,hy+28,3,2,'#ffd700');rect(ctx,hx+24,hy+28,3,2,'#ffd700');
+      ellipse(ctx,11,50,2,2,'#ffd700');ellipse(ctx,53,50,2,2,'#ffd700');
+      // Crown braids connecting
+      rect(ctx,12,10,4,8,H[2]);rect(ctx,48,10,4,8,H[2]);
       // Bangs
-      rect(ctx,hx+2,hy+1,20,4,hb);rect(ctx,hx+8,hy+2,8,2,hh);
-      rect(ctx,hx+3,hy+4,6,2,hb);rect(ctx,hx+15,hy+4,5,2,hb);
+      rect(ctx,16,8,26,9,H[2]);rect(ctx,18,9,20,6,H[3]);
+      rect(ctx,22,10,8,3,H[4]);
+      // Part
+      rect(ctx,30,8,2,6,sk[2]);
       break;
-    case 9: // Messy/spiky
-      rect(ctx,hx-1,hy-1,2,10,hb);rect(ctx,hx+23,hy-1,2,10,hb);
-      // Spiky top
-      rect(ctx,hx+2,hy-3,20,6,hb);
-      for(let i=0;i<6;i++){
-        const sx=hx+2+i*3+Math.floor(rng()*2);
-        const sh=3+Math.floor(rng()*4);
-        rect(ctx,sx,hy-3-sh,3,sh,hb);rect(ctx,sx+1,hy-2-sh,1,sh-1,hh);
+    case 9: // Messy/wild
+      // Lots of volume
+      ellipse(ctx,32,10,20,12,H[2]);
+      // Random spikes and tufts
+      for(let i=0;i<8;i++){
+        const sx=14+i*5+ri(4),sy=ri(4)-2;
+        rect(ctx,sx,sy,3+ri(2),8+ri(4),H[1+ri(3)]);
+        px(ctx,sx+1,sy,H[4]);
       }
+      // Wild sides
+      rect(ctx,8,12,6,20,H[2]);rect(ctx,50,12,6,20,H[2]);
+      rect(ctx,9,14,3,14,H[3]);rect(ctx,51,14,3,12,H[4]);
+      // Flyaway strands
+      for(let i=0;i<6;i++){px(ctx,10+ri(44),4+ri(6),H[4]);}
       // Messy bangs
-      rect(ctx,hx+2,hy+2,8,4,hb);rect(ctx,hx+14,hy+3,6,3,hb);
-      rect(ctx,hx+3,hy+3,3,2,hh);
+      rect(ctx,16,10,24,8,H[2]);
+      for(let i=0;i<5;i++){rect(ctx,17+i*4+ri(2),12+ri(3),3,4+ri(3),H[2+ri(2)]);}
       break;
   }
 
-  // --- ACCESSORIES ---
+  // -- ACCESSORIES --
   switch(acc){
     case 'bow':
-      rect(ctx,hx+15,hy-2,4,3,'#ff4080');rect(ctx,hx+13,hy-1,2,2,'#ff4080');
-      rect(ctx,hx+19,hy-1,2,2,'#ff4080');rect(ctx,hx+16,hy-1,2,1,'#ff60a0');
-      px(ctx,hx+17,hy-1,'#d03060');
+      // Big cute bow
+      ellipse(ctx,40,4,5,3,'#ff4080');ellipse(ctx,48,4,5,3,'#ff4080');
+      rect(ctx,43,3,4,4,'#ff4080');ellipse(ctx,44,4,2,2,'#d03060');
+      px(ctx,44,3,'#ff60a0');px(ctx,45,3,'#ff60a0');
       break;
     case 'flower_crown':
-      for(let i=0;i<4;i++){
-        const fx=hx+3+i*5,fy=hy-3;
-        rect(ctx,fx,fy,3,3,['#ff6080','#ffb040','#80d0ff','#ff80c0'][i]);
-        px(ctx,fx+1,fy+1,'#ffd700');
+      for(let i=0;i<5;i++){
+        const fx=14+i*8,fy=5-Math.abs(i-2);
+        const cols=['#ff6080','#ffb040','#80d0ff','#ff80c0','#a0e060'];
+        ellipse(ctx,fx,fy,3,3,cols[i]);px(ctx,fx,fy,'#ffd700');
       }
-      rect(ctx,hx+2,hy-1,20,1,'#40a040');
+      // Vine
+      ctx.globalAlpha=0.7;
+      for(let i=0;i<40;i++) px(ctx,12+i,7+Math.sin(i*0.4)*1.5,'#408040');
+      ctx.globalAlpha=1;
+      // Leaves
+      for(let i=0;i<4;i++){const lx=18+i*8;px(ctx,lx,8,'#50a050');px(ctx,lx+1,9,'#50a050');}
       break;
     case 'headband':
-      rect(ctx,hx,hy+1,24,2,'#d84040');rect(ctx,hx+2,hy+1,20,1,'#f06060');
+      rect(ctx,14,10,34,3,sp[3]);rect(ctx,16,10,30,1,sp[4]);
+      rect(ctx,14,12,34,1,sp[1]);
       break;
     case 'earrings':
-      rect(ctx,hx-2,hy+14,2,3,'#ffd700');rect(ctx,hx+24,hy+14,2,3,'#ffd700');
-      px(ctx,hx-2,hy+16,'#ff6060');px(ctx,hx+25,hy+16,'#ff6060');
+      // Dangly earrings
+      rect(ctx,12,26,2,4,'#ffd700');rect(ctx,50,26,2,4,'#ffd700');
+      ellipse(ctx,13,31,2,2,'#60c8ff');ellipse(ctx,51,31,2,2,'#60c8ff');
+      px(ctx,13,30,'#ffd700');px(ctx,51,30,'#ffd700');
       break;
     case 'necklace':
-      rect(ctx,20,33,8,1,'#ffd700');rect(ctx,22,34,4,1,'#ffd700');
-      px(ctx,23,35,'#60d0ff');px(ctx,24,35,'#60d0ff');
+      // Delicate chain
+      for(let i=0;i<12;i++) px(ctx,25+i,40+Math.sin(i*0.5)*1,'#ffd700');
+      ellipse(ctx,31,42,2,2,'#60d0ff');px(ctx,31,41,'#a0e8ff');
       break;
     case 'glasses':
-      rect(ctx,hx+3,hy+10,6,4,'#404040');rect(ctx,hx+15,hy+10,6,4,'#404040');
-      rect(ctx,hx+4,hy+11,4,2,'#a0d8ff');rect(ctx,hx+16,hy+11,4,2,'#a0d8ff');
-      rect(ctx,hx+9,hy+11,6,1,'#404040');
-      px(ctx,hx+2,hy+11,'#404040');px(ctx,hx+21,hy+11,'#404040');
+      // Round SDV-style glasses
+      ctx.strokeStyle='#483828';ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(25,21,5,0,Math.PI*2);ctx.stroke();
+      ctx.beginPath();ctx.arc(39,21,5,0,Math.PI*2);ctx.stroke();
+      rect(ctx,30,21,4,1,'#483828'); // bridge
+      px(ctx,14,20,'#483828');px(ctx,50,20,'#483828'); // temples
+      // Lens reflection
+      ctx.globalAlpha=0.15;ellipse(ctx,23,20,2,2,'#fff');ellipse(ctx,37,20,2,2,'#fff');
+      ctx.globalAlpha=1;
       break;
     case 'hat':
-      rect(ctx,hx-2,hy-2,28,3,shirt.base);rect(ctx,hx+2,hy-8,20,7,shirt.base);
-      rect(ctx,hx+3,hy-7,18,2,shirt.highlight);
-      rect(ctx,hx+2,hy-2,20,1,shirt.shadow);
-      rect(ctx,hx+4,hy-4,14,1,darken(shirt.base,0.7));
+      // Straw hat / SDV farmer hat
+      rect(ctx,8,4,48,4,sp[3]);rect(ctx,10,3,44,2,sp[4]);
+      rect(ctx,14,-2,34,8,sp[3]);rect(ctx,16,-1,30,5,sp[4]);
+      rect(ctx,18,0,26,2,sp[5]);
+      // Hatband
+      rect(ctx,14,4,34,2,sp[1]);rect(ctx,16,4,30,1,sp[0]);
       break;
     case 'bandana':
-      rect(ctx,hx,hy+1,24,3,shirt.base);rect(ctx,hx+2,hy+1,20,1,shirt.highlight);
-      // Knot on side
-      rect(ctx,hx+22,hy+2,4,2,shirt.base);rect(ctx,hx+24,hy+4,3,3,shirt.base);
-      rect(ctx,hx+25,hy+6,2,2,shirt.shadow);
-      break;
-    case 'scarf':
-      rect(ctx,17,31,14,4,shirt.base);rect(ctx,18,32,12,2,shirt.highlight);
-      rect(ctx,28,33,4,6,shirt.base);rect(ctx,29,35,3,4,shirt.shadow);
+      rect(ctx,14,9,34,4,sp[3]);rect(ctx,16,9,30,2,sp[4]);rect(ctx,14,12,34,1,sp[1]);
+      // Knot and tails
+      rect(ctx,46,11,4,3,sp[3]);rect(ctx,48,13,4,6,sp[2]);rect(ctx,50,17,3,5,sp[3]);
+      rect(ctx,49,14,2,4,sp[4]);
       break;
   }
 
@@ -1038,7 +1147,7 @@ function updatePreview(id) {
   const pctx = preview.getContext('2d');
   const img = new Image();
   img.onload = () => {
-    pctx.clearRect(0, 0, 48, 48);
+    pctx.clearRect(0, 0, 64, 64);
     pctx.drawImage(img, 0, 0);
   };
   img.src = avatarDataUrls[id];
