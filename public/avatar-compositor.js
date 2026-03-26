@@ -73,7 +73,9 @@ const EYES = ['almond.png','neutral.png','elegant.png','droopy.png','startled.pn
 const BROWS = ['shortstraight.png','thinstraight.png','thickstraight.png','shortthin.png','thickdownturned.png','thinangry.png','shortangry.png','thickangry.png'];
 const NOSES = ['button.png','dainty.png','upturned.png','slightdefined.png','defined.png','greek.png','roman.png','buttonbridge.png','definedbridge.png'];
 const MOUTHS = ['smilelight.png','smileheavy.png','neutrallight.png','neutralheavy.png','uncertainlight.png']; // removed *no.png variants (zero detail - pure skin shading)
-const HAIRS = ['wavylong.png','longstraight.png','longstraightvol.png','wavybob.png','straightbob.png','braids.png','pigtails.png','bun.png','lowbun.png','widebun.png','curlybob.png','curlyhalfup.png','curlybun.png','curlyspacebuns.png','spacebuns.png','spacebunstwin.png','longpony.png','midlengthpony.png','sideswept.png','faceframe.png','longmidpart.png','curtainbangs.png','pixie.png','afro1.png','afro2.png','shortmessy.png','shortneat.png','midchoppy.png','pulledback.png','longdread.png','shortdreads.png','wisps.png','buzz.png','spiky.png','slickedback.png','slickedspiky.png','shortshaved.png','crewshaved.png','curlyshaved.png','tallspikes.png','dreadsbun.png','shortmess.png'];
+const HAIRS_FEM = ['wavylong.png','longstraight.png','longstraightvol.png','wavybob.png','straightbob.png','braids.png','pigtails.png','bun.png','lowbun.png','widebun.png','curlybob.png','curlyhalfup.png','curlybun.png','curlyspacebuns.png','spacebuns.png','spacebunstwin.png','longpony.png','midlengthpony.png','sideswept.png','faceframe.png','longmidpart.png','curtainbangs.png','pixie.png','afro1.png','afro2.png','shortmessy.png','shortneat.png','midchoppy.png','pulledback.png','longdread.png','shortdreads.png','wisps.png','dreadsbun.png'];
+const HAIRS_MASC = ['buzz.png','spiky.png','slickedback.png','slickedspiky.png','shortshaved.png','crewshaved.png','curlyshaved.png','tallspikes.png','shortmessy.png','shortneat.png','shortmess.png','midchoppy.png','pulledback.png','afro1.png','afro2.png','shortdreads.png'];
+const HAIRS = [...HAIRS_FEM, ...HAIRS_MASC];
 const BANGS = ['straight1.png','straight2.png','side1.png','side2.png','swoopy.png','sideparttucked.png','curlyside1.png','curlyside2.png','curlymidpart.png','curlysideleft.png','wavymid.png','widowspeak.png','messyspiky.png','shortdangly.png','sidesweptleft.png','curledback.png','slickedbacklong.png','shortdisheveled.png','midshortmess.png','shortslightmess.png','shortneat.png','quailfeather.png'];
 const TOPS = ['crewneck.png','vneck.png','turtleneck.png','frill.png','roundneck.png','shoulderfree.png','tanktop.png','widecut.png','asymmetrical.png','fancy.png','cutetop.png','spagetti.png','ruffletop.png','strapless.png','neckholder.png','widevneck.png','ruffletop2.png','princesstop.png','striped.png','sari.png','widecut2.png','nosleeves.png','collarstand.png','uniform.png','tallcollar.png','shirtsweater.png','sweater.png','shirtbow.png','shirttie.png','tatter.png','jumpsuit.png','robe.png'];
 const SLEEVES = ['regsleeves.png','puffysleeves.png','elegantsleeves.png','fancysleeves.png','lowsleeves.png','squaresleeves.png','maxruffles.png','rippedsleeves.png'];
@@ -309,11 +311,16 @@ async function generateAvatar() {
   const noseImg = await loadImage(noseName);
   if (noseImg) stampShadeDiffs(getPixels(noseImg));
 
-  // 3b. Facial hair (uses hair color, stamped as non-skin details)
-  const beardName = pick(FACIAL_HAIR);
+  // 3b. Facial hair - only with masculine hairstyles, recolor to match hair
+  const isMascHair = HAIRS_MASC.includes(hairName);
+  const beardName = isMascHair ? pick(FACIAL_HAIR) : null;
   if (beardName) {
     const img = await loadImage(beardName);
-    if (img) stampNonSkin(getPixels(img));
+    if (img) {
+      // Recolor beard with hair color then stamp only non-skin pixels
+      const bd = recolorHairZoned(getPixels(img));
+      stampNonSkin(bd);
+    }
   }
 
   // 4. Clothing
@@ -397,7 +404,7 @@ async function generateAvatar() {
           // Skin pixel: if surrounded by lots of hair, make it hair (scalp)
           // If sparse hair nearby, keep as skin (exposed face)
           const density = hairDensity[y * 64 + x];
-          const makeHair = density >= 6; // need 6+ hair pixels in 7x7 area
+          const makeHair = density >= 12; // need 12+ hair pixels in 7x7 area (tight boundary)
           const nc = recolorPixel(r, g, b, skin, hair, eye, lip, makeHair);
           d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
         }
@@ -446,10 +453,13 @@ async function generateAvatar() {
   }
   // Re-stamp nose shade diffs
   if (noseImg) stampShadeDiffs(getPixels(noseImg));
-  // Re-stamp beard
+  // Re-stamp beard (recolored)
   if (beardName) {
     const img = await loadImage(beardName);
-    if (img) stampNonSkin(getPixels(img));
+    if (img) {
+      const bd = recolorHairZoned(getPixels(img));
+      stampNonSkin(bd);
+    }
   }
 
   // Upscale to 256x256
