@@ -323,8 +323,10 @@ async function generateAvatar() {
     const hairDark = hair[Math.max(0, Math.floor(hair.length / 2) - 1)];
     const hairFill = new ImageData(64, 64);
     // Get hair and bang pixel coverage
-    const hPixels = hairImg2 ? getPixels(await loadImage(hairName)) : null;
-    const bPixels = bangImg2 ? getPixels(await loadImage(bangName)) : null;
+    const hImg = await loadImage(hairName);
+    const bImg = await loadImage(bangName);
+    const hPixels = hImg ? getPixels(hImg) : null;
+    const bPixels = bImg ? getPixels(bImg) : null;
     for (let y = 0; y < 64; y++) {
       for (let x = 0; x < 64; x++) {
         const i = (y * 64 + x) * 4;
