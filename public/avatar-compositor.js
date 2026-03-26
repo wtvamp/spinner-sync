@@ -316,27 +316,26 @@ async function generateAvatar() {
   const ov = pick(OVERS);
   if (ov) { const img = await loadImage(ov); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
 
-  // 5. Hair - first paint a solid hair-color fill under the crown,
-  // then layer the detailed hair strands on top with smart recolor
-  // This prevents the "bald" look where skin shows through hair gaps
+  // 5. Hair - paint a hair-color fill ONLY where hair/bang layers have pixels
+  // This follows the natural hair shape instead of a hard rectangle
   {
-    // Paint hair-colored base across the top of the head where hair should be
-    // Use the mid-tone of the hair palette
     const hairMid = hair[Math.floor(hair.length / 2)];
+    const hairDark = hair[Math.max(0, Math.floor(hair.length / 2) - 1)];
     const hairFill = new ImageData(64, 64);
-    // Fill the crown area (y=4-18, within face mask width) with solid hair color
-    if (faceImg) {
-      const faceData = getPixels(faceImg);
-      for (let y = 0; y < 20; y++) {
-        for (let x = 0; x < 64; x++) {
-          const i = (y * 64 + x) * 4;
-          // Only fill where the face has pixels (so we don't go outside the head)
-          if (faceData.data[i + 3] > 0) {
-            hairFill.data[i] = hairMid[0];
-            hairFill.data[i + 1] = hairMid[1];
-            hairFill.data[i + 2] = hairMid[2];
-            hairFill.data[i + 3] = 255;
-          }
+    // Get hair and bang pixel coverage
+    const hPixels = hairImg2 ? getPixels(await loadImage(hairName)) : null;
+    const bPixels = bangImg2 ? getPixels(await loadImage(bangName)) : null;
+    for (let y = 0; y < 64; y++) {
+      for (let x = 0; x < 64; x++) {
+        const i = (y * 64 + x) * 4;
+        const hairHere = (hPixels && hPixels.data[i+3] > 0) || (bPixels && bPixels.data[i+3] > 0);
+        if (hairHere) {
+          // Use darker shade at edges, mid-tone in center for depth
+          const c = (y < 10) ? hairDark : hairMid;
+          hairFill.data[i] = c[0];
+          hairFill.data[i+1] = c[1];
+          hairFill.data[i+2] = c[2];
+          hairFill.data[i+3] = 255;
         }
       }
     }
