@@ -161,23 +161,8 @@ async function generateAvatar() {
   ctx.fillStyle = `rgb(${bg[0]},${bg[1]},${bg[2]})`;
   ctx.fillRect(0, 0, 64, 64);
 
-  // Load face shape to create mask (expanded to include neck/chest area)
   const faceName = pick(FACES);
   const faceImg = await loadImage(faceName);
-  let faceMask = new Set();
-  if (faceImg) {
-    const fd = getPixels(faceImg);
-    for (let y = 0; y < 64; y++)
-      for (let x = 0; x < 64; x++) {
-        const i = (y * 64 + x) * 4;
-        if (fd.data[i+3] > 0) faceMask.add(x + ',' + y);
-      }
-    // Expand mask to cover neck/chest so hair doesn't show through there
-    // Neck area: roughly center columns, below face
-    for (let y = 0; y < 64; y++)
-      for (let x = 16; x < 48; x++)
-        if (y >= 32) faceMask.add(x + ',' + y);  // everything below mid-face in center
-  }
 
   // Helper: recolor an image's pixel data
   function recolorData(imgData, isHair) {
@@ -190,22 +175,6 @@ async function generateAvatar() {
     return imgData;
   }
 
-  // Helper: split image data into back (outside face) and front (inside face)
-  function splitByFace(imgData) {
-    const back = new ImageData(64, 64);
-    const front = new ImageData(64, 64);
-    for (let y = 0; y < 64; y++)
-      for (let x = 0; x < 64; x++) {
-        const i = (y * 64 + x) * 4;
-        if (imgData.data[i+3] === 0) continue;
-        const target = faceMask.has(x+','+y) ? front : back;
-        target.data[i] = imgData.data[i];
-        target.data[i+1] = imgData.data[i+1];
-        target.data[i+2] = imgData.data[i+2];
-        target.data[i+3] = imgData.data[i+3];
-      }
-    return { back, front };
-  }
 
   // Helper: put imagedata onto canvas
   function stamp(imgData) {
@@ -233,31 +202,13 @@ async function generateAvatar() {
     stamp(detail);
   }
 
-  // Load and recolor hair layers, split into back/front
+  // Pre-load hair layers
   const hairName = pick(HAIRS);
   const bangName = pick(BANGS);
-  let hairBack = null, hairFront = null, bangBack = null, bangFront = null;
-
-  const hairImg = await loadImage(hairName);
-  if (hairImg) {
-    const hd = recolorData(getPixels(hairImg), true);
-    const split = splitByFace(hd);
-    hairBack = split.back; hairFront = split.front;
-  }
-  const bangImg = await loadImage(bangName);
-  if (bangImg) {
-    const bd = recolorData(getPixels(bangImg), true);
-    const split = splitByFace(bd);
-    bangBack = split.back; bangFront = split.front;
-  }
 
   // === COMPOSITING ORDER ===
 
-  // 1. Back hair (behind face)
-  if (hairBack) stamp(hairBack);
-  if (bangBack) stamp(bangBack);
-
-  // 2. Face shape (recolored skin)
+  // 1. Face shape (recolored skin) - goes first as base
   if (faceImg) {
     const fd = recolorData(getPixels(faceImg), false);
     stamp(fd);
@@ -285,9 +236,17 @@ async function generateAvatar() {
   const ov = pick(OVERS);
   if (ov) { const img = await loadImage(ov); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
 
-  // 5. Front hair (over forehead)
-  if (hairFront) stamp(hairFront);
-  if (bangFront) stamp(bangFront);
+  // 5. Hair (full layer on top - frames the face)
+  const hairImg = await loadImage(hairName);
+  if (hairImg) {
+    const hd = recolorData(getPixels(hairImg), true);
+    stamp(hd);
+  }
+  const bangImg = await loadImage(bangName);
+  if (bangImg) {
+    const bd = recolorData(getPixels(bangImg), true);
+    stamp(bd);
+  }
 
   // Hair extension
   const he = pick(HAIR_EXT);
