@@ -260,11 +260,37 @@ async function generateAvatar() {
   const ov = pick(OVERS);
   if (ov) { const img = await loadImage(ov); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
 
-  // 5. Hair (full layer on top - uses smart recolor: hair pixels -> hair, skin pixels -> skin)
-  const hairImg = await loadImage(hairName);
-  if (hairImg) { stamp(recolorHairSmart(getPixels(hairImg))); }
-  const bangImg = await loadImage(bangName);
-  if (bangImg) { stamp(recolorHairSmart(getPixels(bangImg))); }
+  // 5. Hair - first paint a solid hair-color fill under the crown,
+  // then layer the detailed hair strands on top with smart recolor
+  // This prevents the "bald" look where skin shows through hair gaps
+  if (hairImg || bangImg) {
+    // Paint hair-colored base across the top of the head where hair should be
+    // Use the mid-tone of the hair palette
+    const hairMid = hair[Math.floor(hair.length / 2)];
+    const hairFill = new ImageData(64, 64);
+    // Fill the crown area (y=4-18, within face mask width) with solid hair color
+    if (faceImg) {
+      const faceData = getPixels(faceImg);
+      for (let y = 0; y < 20; y++) {
+        for (let x = 0; x < 64; x++) {
+          const i = (y * 64 + x) * 4;
+          // Only fill where the face has pixels (so we don't go outside the head)
+          if (faceData.data[i + 3] > 0) {
+            hairFill.data[i] = hairMid[0];
+            hairFill.data[i + 1] = hairMid[1];
+            hairFill.data[i + 2] = hairMid[2];
+            hairFill.data[i + 3] = 255;
+          }
+        }
+      }
+    }
+    stamp(hairFill);
+  }
+  // Now layer the actual hair strands (skin pixels stay as skin, hair pixels show as hair)
+  const hairImg2 = await loadImage(hairName);
+  if (hairImg2) { stamp(recolorHairSmart(getPixels(hairImg2))); }
+  const bangImg2 = await loadImage(bangName);
+  if (bangImg2) { stamp(recolorHairSmart(getPixels(bangImg2))); }
 
   // Hair extension
   const he = pick(HAIR_EXT);
