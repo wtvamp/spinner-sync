@@ -234,6 +234,32 @@ async function generateAvatar() {
     stamp(nonSkin);
   }
 
+  // Helper: stamp pixels where a layer uses a DIFFERENT skin shade than the face
+  // Used for noses and other pure-skin-shading features
+  function stampShadeDiffs(layerData) {
+    if (!faceImg) return;
+    const faceData = getPixels(faceImg);
+    const diff = new ImageData(64, 64);
+    const ld = layerData.data;
+    const fd = faceData.data;
+    const skinSet = BASE_SKIN.map(c => c.join(','));
+    for (let y = 0; y < 64; y++)
+      for (let x = 0; x < 64; x++) {
+        const i = (y*64+x)*4;
+        if (ld[i+3] === 0 || fd[i+3] === 0) continue;
+        const lk = ld[i]+','+ld[i+1]+','+ld[i+2];
+        const fk = fd[i]+','+fd[i+1]+','+fd[i+2];
+        // Both must be skin colors, but different shades
+        if (lk !== fk && skinSet.includes(lk) && skinSet.includes(fk)) {
+          // Recolor the layer's shade to target skin
+          const nc = recolorPixel(ld[i], ld[i+1], ld[i+2], skin, hair, eye, lip, false);
+          diff.data[i] = nc[0]; diff.data[i+1] = nc[1];
+          diff.data[i+2] = nc[2]; diff.data[i+3] = 255;
+        }
+      }
+    stamp(diff);
+  }
+
   // Helper: stamp ONLY detail pixels from imgData
   function stampDetails(imgData, isHair) {
     const detail = new ImageData(64, 64);
@@ -265,8 +291,9 @@ async function generateAvatar() {
   }
 
   // 3. Facial features - stamp only detail pixels
+  const noseName = pick(NOSES);
   const features = [
-    [pick(EYES), false], [pick(BROWS), true], [pick(NOSES), false], [pick(MOUTHS), false]
+    [pick(EYES), false], [pick(BROWS), true], [noseName, false], [pick(MOUTHS), false]
   ];
   const faceAcc = pick(FACE_ACC);
   if (faceAcc) features.push([faceAcc, false]);
@@ -277,6 +304,9 @@ async function generateAvatar() {
     const img = await loadImage(name);
     if (img) stampDetails(getPixels(img), isH);
   }
+  // Nose is pure skin shading - stamp shade differences
+  const noseImg = await loadImage(noseName);
+  if (noseImg) stampShadeDiffs(getPixels(noseImg));
 
   // 4. Clothing
   const topImg = await loadImage(pick(TOPS));
@@ -380,6 +410,8 @@ async function generateAvatar() {
     const img = await loadImage(name);
     if (img) stampDetails(getPixels(img), isH);
   }
+  // Re-stamp nose shade diffs
+  if (noseImg) stampShadeDiffs(getPixels(noseImg));
 
   // Upscale to 256x256
   const output = document.createElement('canvas');
