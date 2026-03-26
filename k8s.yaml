@@ -52,11 +52,19 @@ metadata:
   name: spinner
   namespace: spinner
   annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/proxy-set-headers: "spinner/spinner-ws-headers"
-    nginx.org/websocket-services: "spinner"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - spinner.uplifttech.org
+      secretName: spinner-tls
   rules:
     - host: spinner.uplifttech.org
       http:
@@ -68,12 +76,3 @@ spec:
                 name: spinner
                 port:
                   number: 80
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: spinner-ws-headers
-  namespace: spinner
-data:
-  Upgrade: $http_upgrade
-  Connection: "Upgrade"

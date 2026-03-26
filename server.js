@@ -5,7 +5,9 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  transports: ['websocket'],
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -38,8 +40,12 @@ io.on('connection', (socket) => {
     const randomSegment = Math.random() * 2 * Math.PI;
     const duration = 8000 + Math.random() * 2000;
 
+    // Lock the names at spin time so everyone uses the same list
+    const spinNames = Array.from(viewers.values());
+    if (spinNames.length === 0) { spinning = false; return; }
+
     // Broadcast to ALL clients (including sender)
-    io.emit('spin', { extraRotations, randomSegment, duration });
+    io.emit('spin', { extraRotations, randomSegment, duration, names: spinNames });
 
     setTimeout(() => { spinning = false; }, duration + 4000);
   });

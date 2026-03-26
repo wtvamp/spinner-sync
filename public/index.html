@@ -504,19 +504,22 @@
 
 <script>
 // ---- SOCKET.IO ----
-const socket = io();
+const socket = io({ transports: ['websocket'] });
 
 socket.on('connect', () => console.log('Connected to server'));
 
 // Viewer roster
-socket.on('viewerList', (names) => {
+socket.on('viewerList', (serverNames) => {
+  names = serverNames;
   const ul = document.getElementById('viewerList');
   ul.innerHTML = '';
-  names.forEach(name => {
+  serverNames.forEach(name => {
     const li = document.createElement('li');
     li.innerHTML = `<span class="dot"></span>${name}`;
     ul.appendChild(li);
   });
+  // Redraw wheel with current players (only if not mid-spin)
+  if (!spinning) drawWheel(currentAngle);
 });
 
 // Join toast animation
@@ -528,9 +531,9 @@ socket.on('playerJoined', (name) => {
   setTimeout(() => toast.remove(), 1500);
 });
 
-// When server says SPIN, everyone spins with the same parameters
+// When server says SPIN, everyone spins with the same parameters and names
 socket.on('spin', (data) => {
-  doSpin(data.extraRotations, data.randomSegment, data.duration);
+  doSpin(data.extraRotations, data.randomSegment, data.duration, data.names);
 });
 
 // Name entry
@@ -555,15 +558,20 @@ function requestSpin() {
 }
 
 // ---- CONFIG ----
-const names = ['Gwen', 'Juliana', 'Natalie', 'America', 'Madeline'];
-const colors = [
+let names = [];
+const allColors = [
   ['#ff9a9e', '#fad0c4'],
   ['#a18cd1', '#fbc2eb'],
   ['#84fab0', '#8fd3f4'],
   ['#ffecd2', '#fcb69f'],
   ['#fdcbf1', '#e6dee9'],
+  ['#ffd700', '#fff3b0'],
+  ['#ff6b6b', '#ffa8a8'],
+  ['#89f7fe', '#66a6ff'],
+  ['#c3cfe2', '#f5f7fa'],
+  ['#f093fb', '#f5576c'],
 ];
-const emojis = ['\u273F', '\u2740', '\u273E', '\u2741', '\u273D'];
+const allEmojis = ['\u273F', '\u2740', '\u273E', '\u2741', '\u273D', '\u2606', '\u2665', '\u2736', '\u2764', '\u2734'];
 
 // ---- BACKGROUND ELEMENTS ----
 const starsEl = document.getElementById('stars');
@@ -615,24 +623,57 @@ for (let i = 0; i < 15; i++) {
 // ---- WHEEL ----
 const canvas = document.getElementById('wheel');
 const ctx = canvas.getContext('2d');
-const segments = names.length;
-const segAngle = (2 * Math.PI) / segments;
 let currentAngle = 0;
 let spinning = false;
 
-function drawWheel(angle) {
+function drawWheel(angle, drawNames) {
+  const wheelNames = drawNames || names;
+  const segments = wheelNames.length;
   ctx.clearRect(0, 0, 400, 400);
+
+  if (segments === 0) {
+    // Empty state - waiting for players
+    ctx.save();
+    ctx.translate(200, 200);
+    const emptyGrad = ctx.createRadialGradient(0, 0, 30, 0, 0, 190);
+    emptyGrad.addColorStop(0, '#3a2060');
+    emptyGrad.addColorStop(1, '#2a1545');
+    ctx.beginPath();
+    ctx.arc(0, 0, 190, 0, 2 * Math.PI);
+    ctx.fillStyle = emptyGrad;
+    ctx.fill();
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#ffb6c1';
+    ctx.font = '12px "Press Start 2P"';
+    ctx.textAlign = 'center';
+    ctx.fillText('Waiting for', 0, -10);
+    ctx.fillText('players...', 0, 15);
+    ctx.restore();
+    return;
+  }
+
+  const segAngle = (2 * Math.PI) / segments;
+
   ctx.save();
   ctx.translate(200, 200);
   ctx.rotate(angle);
 
+  // Scale font size based on number of segments and longest name
+  const maxLen = Math.max(...wheelNames.map(n => n.length));
+  let fontSize = 15;
+  if (segments > 8 || maxLen > 10) fontSize = 12;
+  if (segments > 12 || maxLen > 14) fontSize = 10;
+
   for (let i = 0; i < segments; i++) {
     const startAngle = i * segAngle;
     const endAngle = startAngle + segAngle;
+    const colors = allColors[i % allColors.length];
 
     const grad = ctx.createRadialGradient(0, 0, 30, 0, 0, 190);
-    grad.addColorStop(0, colors[i][1]);
-    grad.addColorStop(1, colors[i][0]);
+    grad.addColorStop(0, colors[1]);
+    grad.addColorStop(1, colors[0]);
 
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -649,11 +690,11 @@ function drawWheel(angle) {
     ctx.rotate(startAngle + segAngle / 2);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#2c1810';
-    ctx.font = '600 15px "Press Start 2P"';
-    ctx.fillText(names[i], 110, 5);
+    ctx.font = `600 ${fontSize}px "Press Start 2P"`;
+    ctx.fillText(wheelNames[i], 110, 5);
 
     ctx.font = '18px serif';
-    ctx.fillText(emojis[i], 170, 5);
+    ctx.fillText(allEmojis[i % allEmojis.length], 170, 5);
     ctx.restore();
   }
 
@@ -777,12 +818,17 @@ function playWinSound() {
 }
 
 // ---- SYNCED SPIN ----
-function doSpin(extraRotations, randomSegment, duration) {
+function doSpin(extraRotations, randomSegment, duration, spinNames) {
   if (spinning) return;
+  if (!spinNames || spinNames.length === 0) return;
   spinning = true;
   document.getElementById('spinBtn').disabled = true;
 
   getAudioCtx(); // ensure audio context
+
+  // Use the server-locked names for this spin
+  const segments = spinNames.length;
+  const segAngle = (2 * Math.PI) / segments;
 
   const targetAngle = currentAngle + extraRotations + randomSegment;
   const startAngle = currentAngle;
@@ -795,19 +841,16 @@ function doSpin(extraRotations, randomSegment, duration) {
     const progress = Math.min(elapsed / duration, 1);
 
     // Game-show easing: fast start, long dramatic slowdown at the end
-    // Uses a custom curve that spends ~60% of the time in the last ~15% of movement
     let eased;
     if (progress < 0.3) {
-      // Fast ramp up (first 30% of time = 70% of rotation)
       eased = 0.7 * (progress / 0.3);
     } else {
-      // Loooong dramatic slowdown (last 70% of time = last 30% of rotation)
       const slowProgress = (progress - 0.3) / 0.7;
       eased = 0.7 + 0.3 * (1 - Math.pow(1 - slowProgress, 5));
     }
 
     const angle = startAngle + totalAngle * eased;
-    drawWheel(angle);
+    drawWheel(angle, spinNames);
 
     const segsPassed = Math.floor(angle / segAngle);
     const lastSegs = Math.floor(lastTickAngle / segAngle);
@@ -823,7 +866,7 @@ function doSpin(extraRotations, randomSegment, duration) {
 
       // Dramatic pause before reveal
       setTimeout(() => {
-        showWinner(names[winnerIndex]);
+        showWinner(spinNames[winnerIndex]);
         spinning = false;
         document.getElementById('spinBtn').disabled = false;
       }, 1200);
