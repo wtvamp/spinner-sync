@@ -138,13 +138,14 @@ function isDetailPixel(r, g, b) {
 
 // Image loading cache
 const imageCache = {};
-function loadImage(name) {
+function loadImage(name, dir) {
+  const path = (dir || '/sprites/') + name;
   return new Promise((resolve) => {
-    if (imageCache[name]) { resolve(imageCache[name]); return; }
+    if (imageCache[path]) { resolve(imageCache[path]); return; }
     const img = new Image();
-    img.onload = () => { imageCache[name] = img; resolve(img); };
+    img.onload = () => { imageCache[path] = img; resolve(img); };
     img.onerror = () => resolve(null);
-    img.src = '/sprites/' + name;
+    img.src = path;
   });
 }
 
@@ -176,7 +177,7 @@ async function generateAvatar() {
   ctx.fillRect(0, 0, 64, 64);
 
   const faceName = pick(FACES);
-  const faceImg = await loadImage(faceName);
+  const faceImg = await loadImage(faceName, spriteDir);
 
   // Helper: recolor an image's pixel data
   function recolorData(imgData, isHair) {
@@ -287,6 +288,7 @@ async function generateAvatar() {
 
   // Pick gender presentation first (~35% masc), then pick from appropriate pool
   const isMascHair = Math.random() < 0.35;
+  const spriteDir = isMascHair ? '/sprites-masc/' : '/sprites/';
   const hairName = isMascHair ? pick(HAIRS_MASC) : pick(HAIRS_FEM);
   const bangName = isMascHair ? pick(BANGS_MASC) : pick(BANGS_FEM);
 
@@ -317,13 +319,13 @@ async function generateAvatar() {
     return imgData;
   }
 
-  const bhairImg = await loadImage(hairName);
+  const bhairImg = await loadImage(hairName, spriteDir);
   if (bhairImg) stamp(recolorHairOnly(getPixels(bhairImg)));
 
   // Hair extension (also behind face)
   const he = pick(HAIR_EXT);
   if (he) {
-    const heImg = await loadImage(he);
+    const heImg = await loadImage(he, spriteDir);
     if (heImg) stamp(recolorHairOnly(getPixels(heImg)));
   }
 
@@ -343,33 +345,33 @@ async function generateAvatar() {
   if (faceMark) features.push([faceMark, false]);
 
   for (const [name, isH] of features) {
-    const img = await loadImage(name);
+    const img = await loadImage(name, spriteDir);
     if (img) stampDetails(getPixels(img), isH);
   }
-  const noseImg = await loadImage(noseName);
+  const noseImg = await loadImage(noseName, spriteDir);
   if (noseImg) stampShadeDiffs(getPixels(noseImg));
 
   // 4. Clothing (raw draw)
   const topName = isMascHair ? pick(TOPS_NEUTRAL) : pick([...TOPS_FEM, ...TOPS_NEUTRAL]);
   const slName = pick(SLEEVES);
   const ovName = pick(OVERS);
-  const topImg = await loadImage(topName);
+  const topImg = await loadImage(topName, spriteDir);
   if (topImg) ctx.drawImage(topImg, 0, 0, 64, 64);
-  const slImg = await loadImage(slName);
+  const slImg = await loadImage(slName, spriteDir);
   if (slImg) ctx.drawImage(slImg, 0, 0, 64, 64);
-  if (ovName) { const img = await loadImage(ovName); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
+  if (ovName) { const img = await loadImage(ovName, spriteDir); if (img) ctx.drawImage(img, 0, 0, 64, 64); }
 
   // 5. Glasses (non-skin stamp)
   const gl = pick(GLASSES);
   if (gl) {
-    const img = await loadImage(gl);
+    const img = await loadImage(gl, spriteDir);
     if (img) stampNonSkin(getPixels(img));
   }
 
   // 6. Beard (non-skin stamp, masc only, recolored)
   const beardName = isMascHair ? pick(FACIAL_HAIR) : null;
   if (beardName) {
-    const img = await loadImage(beardName);
+    const img = await loadImage(beardName, spriteDir);
     if (img) {
       const bd = recolorData(getPixels(img), true);
       stampNonSkin(bd);
@@ -378,34 +380,34 @@ async function generateAvatar() {
 
   // 7. Ear/neck accessories (non-skin stamp)
   const ea = pick(EAR_ACC);
-  if (ea) { const img = await loadImage(ea); if (img) stampNonSkin(getPixels(img)); }
+  if (ea) { const img = await loadImage(ea, spriteDir); if (img) stampNonSkin(getPixels(img)); }
   const na = pick(NECK_ACC);
-  if (na) { const img = await loadImage(na); if (img) stampNonSkin(getPixels(img)); }
+  if (na) { const img = await loadImage(na, spriteDir); if (img) stampNonSkin(getPixels(img)); }
 
   // 8. TOP HAIR / BANGS - goes on top of EVERYTHING (this is the "thair" layer)
   //    Only recolor hair pixels, skin stays skin
   if (bangName) {
-    const thairImg = await loadImage(bangName);
+    const thairImg = await loadImage(bangName, spriteDir);
     if (thairImg) stamp(recolorHairOnly(getPixels(thairImg)));
   }
 
   // 9. Hat - very top (same approach)
   const hat = isMascHair ? pick(HATS_MASC) : pick(HATS_FEM);
   if (hat) {
-    const img = await loadImage(hat);
+    const img = await loadImage(hat, spriteDir);
     if (img) stamp(recolorHairOnly(getPixels(img)));
   }
 
   // 10. RE-STAMP facial details (eyes/brows/mouth always visible through hair/hat)
   for (const [name, isH] of features) {
-    const img = await loadImage(name);
+    const img = await loadImage(name, spriteDir);
     if (img) stampDetails(getPixels(img), isH);
   }
   if (noseImg) stampShadeDiffs(getPixels(noseImg));
   // Re-stamp clothing non-skin (visible through hair)
   if (topImg) stampNonSkin(getPixels(topImg));
   if (slImg) stampNonSkin(getPixels(slImg));
-  if (ovName) { const img = await loadImage(ovName); if (img) stampNonSkin(getPixels(img)); }
+  if (ovName) { const img = await loadImage(ovName, spriteDir); if (img) stampNonSkin(getPixels(img)); }
 
   // Upscale to 256x256
   const output = document.createElement('canvas');
