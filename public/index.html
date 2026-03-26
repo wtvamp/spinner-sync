@@ -568,11 +568,19 @@ const AVATAR_SEEDS = [
   'Juniper','Blossom','Opal','Cricket','Starla'
 ];
 
-// SDV palettes - warm tones, hue-shifted shadows
-// Generate avatar URLs from DiceBear API
+// Generate avatar URLs - DiceBear pixel-art style with warm SDV-like background
+// Mouth limited to happy expressions, hair limited to long styles for girls
 AVATAR_SEEDS.forEach(seed => {
   avatarDataUrls.push(
-    `https://api.dicebear.com/9.x/adventurer/svg?seed=${seed}&backgroundColor=d4a878&size=128`
+    `https://api.dicebear.com/9.x/pixel-art/svg?seed=${seed}&size=128` +
+    `&backgroundColor=c8a070,d4a878,bfa080` +
+    `&mouth=happy01,happy02,happy03,happy04,happy05,happy06,happy07,happy08,happy09,happy10,happy11,happy12,happy13` +
+    `&hair=long01,long02,long03,long04,long05,long06,long07,long08,long09,long10,long11,long12,long13,long14,long15,long16,long17,long18,long19,long20,long21` +
+    `&hairColor=d2b48c,8b4513,daa520,800080,4169e1,2e8b57,ff6347,c71585,4b0082,dc143c` +
+    `&accessories=variant01,variant02,variant03,variant04&accessoriesProbability=30` +
+    `&glassesProbability=15` +
+    `&clothing=variant01,variant02,variant03,variant04,variant05,variant06,variant07,variant08,variant09,variant10,variant11,variant12,variant13,variant14,variant15,variant16,variant17,variant18,variant19,variant20,variant21,variant22,variant23` +
+    `&clothingColor=e74c3c,3498db,2ecc71,f39c12,9b59b6,1abc9c,e67e22,ff69b4`
   );
 });
 
