@@ -446,14 +446,7 @@ async function generateAvatar() {
 
   // 9. No hard skin-fix needed - handled by smart hair recolor below
 
-  // 10. RE-STAMP all facial details on top (so they show through hair/clothes)
-  for (const [name, isH] of features) {
-    const img = await loadImage(name);
-    if (img) stampDetails(getPixels(img), isH);
-  }
-  // Re-stamp nose shade diffs
-  if (noseImg) stampShadeDiffs(getPixels(noseImg));
-  // Re-stamp beard (recolored)
+  // 10. Re-stamp beard FIRST (so eyes go on top of it)
   if (beardName) {
     const img = await loadImage(beardName);
     if (img) {
@@ -461,6 +454,13 @@ async function generateAvatar() {
       stampNonSkin(bd);
     }
   }
+  // 11. RE-STAMP all facial details on top (eyes/brows/mouth ALWAYS visible)
+  for (const [name, isH] of features) {
+    const img = await loadImage(name);
+    if (img) stampDetails(getPixels(img), isH);
+  }
+  // Re-stamp nose shade diffs
+  if (noseImg) stampShadeDiffs(getPixels(noseImg));
 
   // Upscale to 256x256
   const output = document.createElement('canvas');
