@@ -288,7 +288,7 @@ async function generateAvatar() {
   // Pre-load hair layers
   const hairName = pick(HAIRS);
   const isMascHair = HAIRS_MASC.includes(hairName);
-  const bangName = isMascHair ? pick(BANGS_MASC) : pick(BANGS_FEM);
+  const bangName = isMascHair ? null : pick(BANGS_FEM); // no bangs for masc - they add too much length
 
   // === COMPOSITING ORDER ===
 
