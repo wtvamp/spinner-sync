@@ -73,8 +73,8 @@ const EYES = ['almond.png','neutral.png','elegant.png','droopy.png','startled.pn
 const BROWS = ['shortstraight.png','thinstraight.png','thickstraight.png','shortthin.png','thickdownturned.png','thinangry.png','shortangry.png','thickangry.png'];
 const NOSES = ['button.png','dainty.png','upturned.png','slightdefined.png','defined.png','greek.png','roman.png','buttonbridge.png','definedbridge.png'];
 const MOUTHS = ['smilelight.png','smileheavy.png','neutrallight.png','neutralheavy.png','uncertainlight.png']; // removed *no.png variants (zero detail - pure skin shading)
-const HAIRS = ['wavylong.png','longstraight.png','longstraightvol.png','wavybob.png','straightbob.png','braids.png','pigtails.png','bun.png','lowbun.png','widebun.png','curlybob.png','curlyhalfup.png','curlybun.png','curlyspacebuns.png','spacebuns.png','spacebunstwin.png','longpony.png','midlengthpony.png','sideswept.png','faceframe.png','longmidpart.png','curtainbangs.png','pixie.png','afro1.png','afro2.png','shortmessy.png','shortneat.png','midchoppy.png','pulledback.png','longdread.png','shortdreads.png','wisps.png'];
-const BANGS = ['straight1.png','straight2.png','side1.png','side2.png','swoopy.png','sideparttucked.png','curlyside1.png','curlyside2.png','curlymidpart.png','curlysideleft.png','wavymid.png','widowspeak.png','messyspiky.png','shortdangly.png','sidesweptleft.png','curledback.png','slickedbacklong.png','shortdisheveled.png','midshortmess.png','shortslightmess.png'];
+const HAIRS = ['wavylong.png','longstraight.png','longstraightvol.png','wavybob.png','straightbob.png','braids.png','pigtails.png','bun.png','lowbun.png','widebun.png','curlybob.png','curlyhalfup.png','curlybun.png','curlyspacebuns.png','spacebuns.png','spacebunstwin.png','longpony.png','midlengthpony.png','sideswept.png','faceframe.png','longmidpart.png','curtainbangs.png','pixie.png','afro1.png','afro2.png','shortmessy.png','shortneat.png','midchoppy.png','pulledback.png','longdread.png','shortdreads.png','wisps.png','buzz.png','spiky.png','slickedback.png','slickedspiky.png','shortshaved.png','crewshaved.png','curlyshaved.png','tallspikes.png','dreadsbun.png','shortmess.png'];
+const BANGS = ['straight1.png','straight2.png','side1.png','side2.png','swoopy.png','sideparttucked.png','curlyside1.png','curlyside2.png','curlymidpart.png','curlysideleft.png','wavymid.png','widowspeak.png','messyspiky.png','shortdangly.png','sidesweptleft.png','curledback.png','slickedbacklong.png','shortdisheveled.png','midshortmess.png','shortslightmess.png','shortneat.png','quailfeather.png'];
 const TOPS = ['crewneck.png','vneck.png','turtleneck.png','frill.png','roundneck.png','shoulderfree.png','tanktop.png','widecut.png','asymmetrical.png','fancy.png','cutetop.png','spagetti.png','ruffletop.png','strapless.png','neckholder.png','widevneck.png','ruffletop2.png','princesstop.png','striped.png','sari.png','widecut2.png','nosleeves.png','collarstand.png','uniform.png','tallcollar.png','shirtsweater.png','sweater.png','shirtbow.png','shirttie.png','tatter.png','jumpsuit.png','robe.png'];
 const SLEEVES = ['regsleeves.png','puffysleeves.png','elegantsleeves.png','fancysleeves.png','lowsleeves.png','squaresleeves.png','maxruffles.png','rippedsleeves.png'];
 const OVERS = [null,null,null,null,null,null,null,null,'cardigan.png','hoodie.png','jacket.png','vest.png','scarf.png','overalls1.png','overalls2.png','suspenders.png','cape.png','neckkerchief.png','openshirt.png','suitjacket.png','winterjacket1.png','winterjacket2.png','uniformjacket.png','ruffles.png','sweatervest.png','apron.png','bowtie.png'];
@@ -85,6 +85,7 @@ const GLASSES = [null,null,null,null,null,null,null,null,null,null,'glassesbotto
 const HAIR_EXT = [null,null,null,null,null,null,'hairext1.png','hairext2.png','hairext3.png','hairext4.png','hairext5.png'];
 const FACE_ACC = [null,null,null,null,null,'blush.png','freckles.png','lightfreckles.png','beautymark1.png','beautymark2.png','beautymark3.png','eyebags.png'];
 const FACE_MARKS = [null,null,null,null,null,null,null,null,'nosepierce.png','lippiercing.png','elfears.png','mermaid.png'];
+const FACIAL_HAIR = [null,null,null,null,null,null,null,null,null,null,null,null,'goatee.png','goatee_2.png','mustache.png','fullbeard.png','chincurtain.png','chin_bit.png','sideburn.png','goatee_sideburn.png','mustache_sideburn.png','chincurtain_sideburn.png','chin_bit_sideburn.png','circle_beard_sideburn.png','full_beard_sideburn.png'];
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -308,6 +309,13 @@ async function generateAvatar() {
   const noseImg = await loadImage(noseName);
   if (noseImg) stampShadeDiffs(getPixels(noseImg));
 
+  // 3b. Facial hair (uses hair color, stamped as non-skin details)
+  const beardName = pick(FACIAL_HAIR);
+  if (beardName) {
+    const img = await loadImage(beardName);
+    if (img) stampNonSkin(getPixels(img));
+  }
+
   // 4. Clothing
   const topImg = await loadImage(pick(TOPS));
   if (topImg) { ctx.drawImage(topImg, 0, 0, 64, 64); }
@@ -389,7 +397,7 @@ async function generateAvatar() {
           // Skin pixel: if surrounded by lots of hair, make it hair (scalp)
           // If sparse hair nearby, keep as skin (exposed face)
           const density = hairDensity[y * 64 + x];
-          const makeHair = density >= 8; // need 8+ hair pixels in 7x7 area
+          const makeHair = density >= 6; // need 6+ hair pixels in 7x7 area
           const nc = recolorPixel(r, g, b, skin, hair, eye, lip, makeHair);
           d[i] = nc[0]; d[i+1] = nc[1]; d[i+2] = nc[2];
         }
@@ -438,6 +446,11 @@ async function generateAvatar() {
   }
   // Re-stamp nose shade diffs
   if (noseImg) stampShadeDiffs(getPixels(noseImg));
+  // Re-stamp beard
+  if (beardName) {
+    const img = await loadImage(beardName);
+    if (img) stampNonSkin(getPixels(img));
+  }
 
   // Upscale to 256x256
   const output = document.createElement('canvas');
