@@ -308,31 +308,158 @@
     z-index: 50;
   }
 
-  .status {
+  .viewer-panel {
     position: fixed;
-    top: 15px;
-    left: 15px;
-    padding: 6px 10px;
+    top: 12px;
+    left: 12px;
+    padding: 10px 14px;
     font-family: 'Press Start 2P', cursive;
     font-size: 8px;
     color: #84fab0;
     z-index: 50;
     text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+    background: rgba(26, 14, 46, 0.75);
+    border: 2px solid rgba(132, 250, 176, 0.3);
+    border-radius: 10px;
+    max-width: 220px;
   }
 
-  .status .dot {
+  .viewer-panel .panel-title {
+    color: #ffd700;
+    font-size: 9px;
+    margin-bottom: 8px;
+    text-shadow: 1px 1px 0 #8b4513;
+  }
+
+  .viewer-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .viewer-list li {
+    padding: 3px 0;
+    color: #ffb6c1;
+    font-size: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .viewer-list li .dot {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: #84fab0;
-    margin-right: 6px;
     animation: pulse 1.5s ease-in-out infinite;
+    flex-shrink: 0;
   }
 
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
+  }
+
+  .join-toast {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
+    color: #84fab0;
+    text-shadow: 2px 2px 0 #1a0e2e;
+    z-index: 90;
+    pointer-events: none;
+    animation: toastPop 1.5s ease-out forwards;
+    white-space: nowrap;
+  }
+
+  @keyframes toastPop {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    40% { transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
+  }
+
+  /* Name entry modal */
+  .name-modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(26, 14, 46, 0.95);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+  }
+
+  .name-modal.hidden { display: none; }
+
+  .name-modal h2 {
+    color: #ffd700;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 20px;
+    text-shadow: 3px 3px 0 #8b4513;
+    text-align: center;
+    line-height: 1.8;
+  }
+
+  .name-modal p {
+    color: #ffb6c1;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 10px;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+  }
+
+  .name-input {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 16px;
+    padding: 12px 20px;
+    border: 3px solid #ffd700;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    text-align: center;
+    outline: none;
+    width: 280px;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.3);
+  }
+
+  .name-input::placeholder {
+    color: rgba(255, 182, 193, 0.5);
+    font-size: 11px;
+  }
+
+  .name-input:focus {
+    border-color: #ff69b4;
+    box-shadow: 0 0 20px rgba(255, 105, 180, 0.4);
+  }
+
+  .join-btn {
+    padding: 12px 35px;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 14px;
+    background: linear-gradient(180deg, #84fab0, #5bc990);
+    color: #1a0e2e;
+    border: 3px solid #ffd700;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 5px 0 #3a9d6a, 0 7px 15px rgba(0,0,0,0.3);
+    transition: all 0.1s;
+  }
+
+  .join-btn:hover {
+    background: linear-gradient(180deg, #a0ffc8, #84fab0);
+    transform: translateY(-2px);
+    box-shadow: 0 7px 0 #3a9d6a, 0 9px 20px rgba(0,0,0,0.3);
+  }
+
+  .join-btn:active {
+    transform: translateY(3px);
+    box-shadow: 0 2px 0 #3a9d6a;
   }
 </style>
 </head>
@@ -342,7 +469,18 @@
 <div id="flowers"></div>
 <div id="fireflies"></div>
 
-<div class="status"><span class="dot"></span><span id="viewerCount">1 watching</span></div>
+<!-- Name entry modal -->
+<div class="name-modal" id="nameModal">
+  <h2>Prize Drawing!</h2>
+  <p>Enter your name to join</p>
+  <input type="text" class="name-input" id="nameInput" placeholder="Your name..." maxlength="20" autocomplete="off">
+  <button class="join-btn" id="joinBtn" onclick="joinRoom()">JOIN</button>
+</div>
+
+<div class="viewer-panel" id="viewerPanel">
+  <div class="panel-title">Who's Here:</div>
+  <ul class="viewer-list" id="viewerList"></ul>
+</div>
 
 <div class="title">Prize Drawing!</div>
 
@@ -370,14 +508,46 @@ const socket = io();
 
 socket.on('connect', () => console.log('Connected to server'));
 
-socket.on('viewerCount', (count) => {
-  document.getElementById('viewerCount').textContent = count + ' watching';
+// Viewer roster
+socket.on('viewerList', (names) => {
+  const ul = document.getElementById('viewerList');
+  ul.innerHTML = '';
+  names.forEach(name => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="dot"></span>${name}`;
+    ul.appendChild(li);
+  });
+});
+
+// Join toast animation
+socket.on('playerJoined', (name) => {
+  const toast = document.createElement('div');
+  toast.className = 'join-toast';
+  toast.textContent = name + ' joined!';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 1500);
 });
 
 // When server says SPIN, everyone spins with the same parameters
 socket.on('spin', (data) => {
   doSpin(data.extraRotations, data.randomSegment, data.duration);
 });
+
+// Name entry
+function joinRoom() {
+  const input = document.getElementById('nameInput');
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+  socket.emit('joinWithName', name);
+  document.getElementById('nameModal').classList.add('hidden');
+}
+
+document.getElementById('nameInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') joinRoom();
+});
+
+// Auto-focus the name input
+setTimeout(() => document.getElementById('nameInput').focus(), 300);
 
 function requestSpin() {
   if (spinning) return;
@@ -582,9 +752,17 @@ function toggleMusic() {
   }
 }
 
-function playSpinTick() {
+function playSpinTick(progress) {
   const ac = getAudioCtx();
-  playNote(600 + Math.random() * 400, ac.currentTime, 0.05, 'square', 0.05);
+  // Pitch drops and volume rises as it slows - builds tension!
+  const pitch = 400 + (1 - progress) * 600;
+  const vol = 0.04 + progress * 0.08;
+  const len = 0.03 + progress * 0.12;
+  playNote(pitch, ac.currentTime, len, 'square', vol);
+  // Add a lower undertone as it gets close to stopping
+  if (progress > 0.7) {
+    playNote(pitch * 0.5, ac.currentTime, len * 1.5, 'triangle', vol * 0.5);
+  }
 }
 
 function playWinSound() {
@@ -615,14 +793,25 @@ function doSpin(extraRotations, randomSegment, duration) {
   function animate(now) {
     const elapsed = now - startTime;
     const progress = Math.min(elapsed / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    const angle = startAngle + totalAngle * eased;
 
+    // Game-show easing: fast start, long dramatic slowdown at the end
+    // Uses a custom curve that spends ~60% of the time in the last ~15% of movement
+    let eased;
+    if (progress < 0.3) {
+      // Fast ramp up (first 30% of time = 70% of rotation)
+      eased = 0.7 * (progress / 0.3);
+    } else {
+      // Loooong dramatic slowdown (last 70% of time = last 30% of rotation)
+      const slowProgress = (progress - 0.3) / 0.7;
+      eased = 0.7 + 0.3 * (1 - Math.pow(1 - slowProgress, 5));
+    }
+
+    const angle = startAngle + totalAngle * eased;
     drawWheel(angle);
 
     const segsPassed = Math.floor(angle / segAngle);
     const lastSegs = Math.floor(lastTickAngle / segAngle);
-    if (segsPassed !== lastSegs && progress < 0.95) playSpinTick();
+    if (segsPassed !== lastSegs && progress < 0.98) playSpinTick(progress);
     lastTickAngle = angle;
 
     if (progress < 1) {
@@ -632,11 +821,12 @@ function doSpin(extraRotations, randomSegment, duration) {
       const normalizedAngle = (2 * Math.PI - currentAngle % (2 * Math.PI)) % (2 * Math.PI);
       const winnerIndex = Math.floor(normalizedAngle / segAngle) % segments;
 
+      // Dramatic pause before reveal
       setTimeout(() => {
         showWinner(names[winnerIndex]);
         spinning = false;
         document.getElementById('spinBtn').disabled = false;
-      }, 300);
+      }, 1200);
     }
   }
 
